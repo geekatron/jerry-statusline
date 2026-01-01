@@ -1,42 +1,59 @@
 #!/usr/bin/env python3
 """
 ECW Status Line - Evolved Claude Workflow
-Status line for Claude Code with maximum visibility.
+Single-file, self-contained status line for Claude Code.
 
-Version: 1.0.0
-Python: 3.9+
+Version: 2.0.0
+Python: 3.9+ (stdlib only, zero dependencies)
 License: MIT
 
-Usage:
-    Receives JSON from Claude Code via stdin, outputs formatted status line.
-    Configure in ~/.claude/settings.json:
-    {
-        "statusLine": {
-            "type": "command",
-            "command": "python3 /path/to/statusline.py",
-            "padding": 0
-        }
-    }
+Features:
+- 8 segments: Model, Context, Cost, Cache, Session, Tools, Git, Directory
+- Color-coded thresholds (green/yellow/red)
+- Transcript JSONL parsing for per-tool token breakdown
+- Compact mode for smaller terminals
+- Optional config override via external JSON file
+
+Installation:
+    1. Copy this file to ~/.claude/statusline.py
+    2. chmod +x ~/.claude/statusline.py
+    3. Add to ~/.claude/settings.json:
+       {
+         "statusLine": {
+           "type": "command",
+           "command": "python3 ~/.claude/statusline.py",
+           "padding": 0
+         }
+       }
+
+Configuration:
+    Optional: Create ~/.claude/ecw-statusline-config.json to override defaults.
+    See DEFAULT_CONFIG below for all available options.
 """
 
+from __future__ import annotations
+
+import hashlib
 import json
 import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # =============================================================================
-# CONSTANTS
+# VERSION
 # =============================================================================
 
-VERSION = "1.0.0"
-SCRIPT_DIR = Path(__file__).parent.resolve()
-CONFIG_PATH = SCRIPT_DIR / "config.json"
+__version__ = "2.0.0"
 
-# Default configuration (fallback if config.json not found)
+# =============================================================================
+# DEFAULT CONFIGURATION (embedded - no external file required)
+# =============================================================================
+
 DEFAULT_CONFIG: Dict[str, Any] = {
+    # Display settings
     "display": {
         "compact_mode": False,
         "auto_compact_width": 80,
@@ -49,30 +66,59 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "show_percentage": True,
         },
     },
+    # Segment visibility
     "segments": {
         "model": True,
         "context": True,
         "cost": True,
         "cache": True,
         "session": True,
+        "tools": True,  # NEW: Dominant tools segment
         "git": True,
         "directory": True,
     },
-    "context": {"warning_threshold": 0.65, "critical_threshold": 0.85},
-    "cost": {"green_max": 1.00, "yellow_max": 5.00},
-    "cache": {"good_threshold": 0.60, "warning_threshold": 0.30},
+    # Context window thresholds
+    "context": {
+        "warning_threshold": 0.65,
+        "critical_threshold": 0.85,
+    },
+    # Cost thresholds (USD)
+    "cost": {
+        "green_max": 1.00,
+        "yellow_max": 5.00,
+    },
+    # Cache efficiency thresholds
+    "cache": {
+        "good_threshold": 0.60,
+        "warning_threshold": 0.30,
+    },
+    # Session block thresholds (5-hour window)
     "session": {
         "block_duration_seconds": 18000,
         "green_threshold": 0.50,
         "yellow_threshold": 0.80,
     },
+    # Tools segment settings
+    "tools": {
+        "enabled": False,  # Disabled by default (requires transcript parsing)
+        "top_n": 3,  # Show top N tools by token usage
+        "min_tokens": 100,  # Minimum tokens to display a tool
+        "cache_ttl_seconds": 5,  # Cache TTL for transcript parsing
+    },
+    # Git settings
     "git": {
         "show_branch": True,
         "show_status": True,
         "show_uncommitted_count": True,
         "max_branch_length": 20,
     },
-    "directory": {"abbreviate_home": True, "max_length": 25, "basename_only": False},
+    # Directory settings
+    "directory": {
+        "abbreviate_home": True,
+        "max_length": 25,
+        "basename_only": False,
+    },
+    # Colors (ANSI 256)
     "colors": {
         "green": 82,
         "yellow": 220,
@@ -84,27 +130,56 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "directory": 250,
         "git_clean": 82,
         "git_dirty": 220,
+        "tools": 147,  # Light purple for tools
     },
-    "advanced": {"handle_cumulative_bug": True, "git_timeout": 2, "debug": False},
+    # Advanced settings
+    "advanced": {
+        "handle_cumulative_bug": True,
+        "git_timeout": 2,
+        "debug": False,
+    },
 }
 
+# =============================================================================
+# CONFIGURATION LOADING
+# =============================================================================
 
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
+# Config file search paths (in order of priority)
+CONFIG_PATHS = [
+    Path(__file__).parent / "ecw-statusline-config.json",
+    Path.home() / ".claude" / "ecw-statusline-config.json",
+]
+
+# Transcript cache
+_transcript_cache: Dict[str, Tuple[float, Dict[str, int]]] = {}
 
 
 def load_config() -> Dict[str, Any]:
-    """Load configuration from config.json, falling back to defaults."""
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                user_config = json.load(f)
-            # Deep merge with defaults
-            return deep_merge(DEFAULT_CONFIG, user_config)
-        except (json.JSONDecodeError, IOError) as e:
-            debug_log(f"Config load error: {e}")
-    return DEFAULT_CONFIG.copy()
+    """Load configuration from embedded defaults with optional file override."""
+    config = deep_copy(DEFAULT_CONFIG)
+
+    # Try to load external config file
+    for config_path in CONFIG_PATHS:
+        if config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    user_config = json.load(f)
+                config = deep_merge(config, user_config)
+                debug_log(f"Loaded config from {config_path}")
+                break
+            except (json.JSONDecodeError, IOError) as e:
+                debug_log(f"Config load error from {config_path}: {e}")
+
+    return config
+
+
+def deep_copy(obj: Any) -> Any:
+    """Deep copy a nested dict/list structure."""
+    if isinstance(obj, dict):
+        return {k: deep_copy(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [deep_copy(item) for item in obj]
+    return obj
 
 
 def deep_merge(base: Dict, override: Dict) -> Dict:
@@ -120,15 +195,19 @@ def deep_merge(base: Dict, override: Dict) -> Dict:
 
 def debug_log(message: str) -> None:
     """Log debug message to stderr if debug mode enabled."""
-    # Note: Config not loaded yet during early calls, so check env var
     if os.environ.get("ECW_DEBUG") == "1":
         print(f"[ECW-DEBUG] {message}", file=sys.stderr)
+
+
+# =============================================================================
+# ANSI COLOR UTILITIES
+# =============================================================================
 
 
 def ansi_color(code: int) -> str:
     """Generate ANSI 256-color escape sequence."""
     if code == 0:
-        return "\033[0m"  # Reset
+        return "\033[0m"
     return f"\033[38;5;{code}m"
 
 
@@ -142,11 +221,11 @@ def get_terminal_width() -> int:
     try:
         return os.get_terminal_size().columns
     except OSError:
-        return 120  # Default fallback
+        return 120
 
 
 # =============================================================================
-# DATA EXTRACTION
+# DATA EXTRACTION UTILITIES
 # =============================================================================
 
 
@@ -161,18 +240,133 @@ def safe_get(data: Dict, *keys, default: Any = None) -> Any:
     return current if current is not None else default
 
 
+# =============================================================================
+# TRANSCRIPT JSONL PARSING (for per-tool token breakdown)
+# =============================================================================
+
+
+def parse_transcript_for_tools(
+    transcript_path: str, config: Dict
+) -> Dict[str, int]:
+    """
+    Parse transcript JSONL file to extract per-tool token usage.
+    Uses caching to avoid re-parsing on every status update.
+
+    Returns: Dict mapping tool names to token counts.
+    """
+    tools_config = config["tools"]
+
+    if not tools_config["enabled"]:
+        return {}
+
+    if not transcript_path or not Path(transcript_path).exists():
+        debug_log(f"Transcript not found: {transcript_path}")
+        return {}
+
+    # Check cache
+    cache_key = transcript_path
+    cache_ttl = tools_config["cache_ttl_seconds"]
+    now = datetime.now().timestamp()
+
+    if cache_key in _transcript_cache:
+        cached_time, cached_data = _transcript_cache[cache_key]
+        if now - cached_time < cache_ttl:
+            debug_log("Using cached transcript data")
+            return cached_data
+
+    # Parse transcript
+    tool_tokens: Dict[str, int] = {}
+
+    try:
+        with open(transcript_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    _extract_tool_usage(entry, tool_tokens)
+                except json.JSONDecodeError:
+                    continue
+
+        # Cache the result
+        _transcript_cache[cache_key] = (now, tool_tokens)
+        debug_log(f"Parsed transcript: {tool_tokens}")
+
+    except IOError as e:
+        debug_log(f"Transcript read error: {e}")
+        return {}
+
+    return tool_tokens
+
+
+def _extract_tool_usage(entry: Dict, tool_tokens: Dict[str, int]) -> None:
+    """Extract tool usage from a transcript entry."""
+    # Look for tool use in various message formats
+    message = entry.get("message", {})
+
+    # Check for tool_use content blocks
+    content = message.get("content", [])
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict):
+                block_type = block.get("type", "")
+                if block_type == "tool_use":
+                    tool_name = block.get("name", "unknown")
+                    # Estimate tokens from input size (rough approximation)
+                    input_data = block.get("input", {})
+                    token_estimate = _estimate_tokens(input_data)
+                    tool_tokens[tool_name] = tool_tokens.get(tool_name, 0) + token_estimate
+
+                elif block_type == "tool_result":
+                    # Tool results also consume tokens
+                    tool_name = block.get("tool_use_id", "result")
+                    content_data = block.get("content", "")
+                    token_estimate = _estimate_tokens(content_data)
+                    # Attribute to generic "results" category
+                    tool_tokens["results"] = tool_tokens.get("results", 0) + token_estimate
+
+    # Check for usage stats in the entry
+    usage = entry.get("usage", {})
+    if usage:
+        # If we have actual usage data, use it
+        input_tokens = usage.get("input_tokens", 0)
+        output_tokens = usage.get("output_tokens", 0)
+        # Attribute to the message type
+        role = message.get("role", "unknown")
+        if role == "assistant":
+            tool_tokens["assistant"] = tool_tokens.get("assistant", 0) + output_tokens
+        elif role == "user":
+            tool_tokens["user"] = tool_tokens.get("user", 0) + input_tokens
+
+
+def _estimate_tokens(data: Any) -> int:
+    """Estimate token count from data (rough: ~4 chars per token)."""
+    if isinstance(data, str):
+        return len(data) // 4
+    elif isinstance(data, dict):
+        return len(json.dumps(data)) // 4
+    elif isinstance(data, list):
+        return len(json.dumps(data)) // 4
+    return 0
+
+
+# =============================================================================
+# DATA EXTRACTION FUNCTIONS
+# =============================================================================
+
+
 def extract_model_info(data: Dict) -> Tuple[str, str]:
     """Extract model display name and tier."""
     display_name = safe_get(data, "model", "display_name", default="Unknown")
     model_id = safe_get(data, "model", "id", default="").lower()
 
-    # Determine tier from model ID
     if "opus" in model_id:
         tier = "opus"
     elif "haiku" in model_id:
         tier = "haiku"
     else:
-        tier = "sonnet"  # Default to sonnet for unknown
+        tier = "sonnet"
 
     return display_name, tier
 
@@ -181,37 +375,25 @@ def extract_context_info(data: Dict, config: Dict) -> Tuple[float, int, int, boo
     """
     Extract context window usage.
     Returns: (percentage, used_tokens, total_tokens, is_estimated)
-
-    Handles the known bug where cumulative tokens exceed context window
-    by using current_usage when available.
     """
     context_window_size = safe_get(
         data, "context_window", "context_window_size", default=200000
     )
 
-    # Try to use current_usage (more accurate for actual context)
     current_usage = safe_get(data, "context_window", "current_usage")
 
     if current_usage:
         input_tokens = safe_get(current_usage, "input_tokens", default=0)
-        cache_creation = safe_get(
-            current_usage, "cache_creation_input_tokens", default=0
-        )
+        cache_creation = safe_get(current_usage, "cache_creation_input_tokens", default=0)
         cache_read = safe_get(current_usage, "cache_read_input_tokens", default=0)
         used_tokens = input_tokens + cache_creation + cache_read
         is_estimated = False
     else:
-        # Fall back to cumulative totals (may be inaccurate after auto-compact)
-        used_tokens = safe_get(
-            data, "context_window", "total_input_tokens", default=0
-        )
+        used_tokens = safe_get(data, "context_window", "total_input_tokens", default=0)
         is_estimated = True
 
-    # Handle the cumulative bug: cap at 100% but mark as estimated
-    if used_tokens > context_window_size:
-        if config["advanced"]["handle_cumulative_bug"]:
-            is_estimated = True
-            # Don't cap the display, but mark it
+    if used_tokens > context_window_size and config["advanced"]["handle_cumulative_bug"]:
+        is_estimated = True
 
     percentage = (used_tokens / context_window_size) if context_window_size > 0 else 0
 
@@ -229,10 +411,7 @@ def extract_cost_info(data: Dict) -> Tuple[float, int, int]:
 
 
 def extract_cache_info(data: Dict) -> float:
-    """
-    Calculate cache efficiency as ratio of cache reads to total input.
-    Higher = better (more tokens served from cache = cheaper).
-    """
+    """Calculate cache efficiency ratio."""
     current_usage = safe_get(data, "context_window", "current_usage")
 
     if not current_usage:
@@ -249,10 +428,7 @@ def extract_cache_info(data: Dict) -> float:
 
 
 def extract_session_block_info(data: Dict, config: Dict) -> Tuple[float, int]:
-    """
-    Calculate progress through 5-hour session block.
-    Returns: (percentage, elapsed_seconds)
-    """
+    """Calculate progress through 5-hour session block."""
     duration_ms = safe_get(data, "cost", "total_duration_ms", default=0)
     elapsed_seconds = duration_ms // 1000
 
@@ -271,22 +447,35 @@ def extract_workspace_info(data: Dict, config: Dict) -> str:
 
     dir_config = config["directory"]
 
-    # Abbreviate home directory
     if dir_config["abbreviate_home"]:
         home = os.path.expanduser("~")
         if current_dir.startswith(home):
             current_dir = "~" + current_dir[len(home):]
 
-    # Use basename only
     if dir_config["basename_only"]:
         current_dir = os.path.basename(current_dir) or current_dir
 
-    # Truncate if too long
     max_len = dir_config["max_length"]
     if len(current_dir) > max_len:
         current_dir = "..." + current_dir[-(max_len - 3):]
 
     return current_dir
+
+
+def extract_tools_info(data: Dict, config: Dict) -> List[Tuple[str, int]]:
+    """Extract top tools by token usage from transcript."""
+    transcript_path = safe_get(data, "transcript_path", default="")
+    tool_tokens = parse_transcript_for_tools(transcript_path, config)
+
+    tools_config = config["tools"]
+    min_tokens = tools_config["min_tokens"]
+    top_n = tools_config["top_n"]
+
+    # Filter and sort
+    filtered = [(name, tokens) for name, tokens in tool_tokens.items() if tokens >= min_tokens]
+    sorted_tools = sorted(filtered, key=lambda x: x[1], reverse=True)
+
+    return sorted_tools[:top_n]
 
 
 # =============================================================================
@@ -295,20 +484,15 @@ def extract_workspace_info(data: Dict, config: Dict) -> str:
 
 
 def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
-    """
-    Get git branch, status, and uncommitted file count.
-    Returns: (branch_name, is_clean, uncommitted_count) or None if not a git repo.
-    """
+    """Get git branch, status, and uncommitted file count."""
     git_config = config["git"]
     timeout = config["advanced"]["git_timeout"]
 
-    # Get working directory
     cwd = safe_get(data, "workspace", "current_dir") or safe_get(data, "cwd")
     if not cwd:
         return None
 
     try:
-        # Check if in git repo and get branch name
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=cwd,
@@ -322,12 +506,10 @@ def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
 
         branch = result.stdout.strip()
 
-        # Truncate branch name if needed
         max_len = git_config["max_branch_length"]
         if len(branch) > max_len:
             branch = branch[: max_len - 3] + "..."
 
-        # Get status (uncommitted files)
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=cwd,
@@ -336,9 +518,7 @@ def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
             timeout=timeout,
         )
 
-        uncommitted_lines = [
-            line for line in result.stdout.strip().split("\n") if line
-        ]
+        uncommitted_lines = [line for line in result.stdout.strip().split("\n") if line]
         uncommitted_count = len(uncommitted_lines)
         is_clean = uncommitted_count == 0
 
@@ -354,9 +534,7 @@ def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
 # =============================================================================
 
 
-def format_progress_bar(
-    percentage: float, config: Dict, color_code: int
-) -> str:
+def format_progress_bar(percentage: float, config: Dict, color_code: int) -> str:
     """Format a progress bar with color."""
     bar_config = config["display"]["progress_bar"]
     width = bar_config["width"]
@@ -364,7 +542,6 @@ def format_progress_bar(
     empty_char = bar_config["empty_char"]
     show_pct = bar_config["show_percentage"]
 
-    # Clamp percentage to 0-1 for display (but allow showing >100% in number)
     display_pct = min(max(percentage, 0), 1.0)
     filled_count = int(display_pct * width)
     empty_count = width - filled_count
@@ -391,6 +568,13 @@ def format_duration(seconds: int) -> str:
         return f"{minutes}m"
 
 
+def format_tokens_short(tokens: int) -> str:
+    """Format token count in short form (e.g., 1.2k, 15k)."""
+    if tokens >= 1000:
+        return f"{tokens / 1000:.1f}k"
+    return str(tokens)
+
+
 def get_threshold_color(
     value: float,
     green_max: float,
@@ -398,12 +582,8 @@ def get_threshold_color(
     colors: Dict,
     invert: bool = False,
 ) -> int:
-    """
-    Get color code based on threshold.
-    If invert=True, lower values are worse (used for cache efficiency).
-    """
+    """Get color code based on threshold."""
     if invert:
-        # Higher is better (cache efficiency)
         if value >= green_max:
             return colors["green"]
         elif value >= yellow_max:
@@ -411,7 +591,6 @@ def get_threshold_color(
         else:
             return colors["red"]
     else:
-        # Lower is better (context usage, cost)
         if value <= green_max:
             return colors["green"]
         elif value <= yellow_max:
@@ -430,7 +609,6 @@ def build_model_segment(data: Dict, config: Dict) -> str:
     display_name, tier = extract_model_info(data)
     colors = config["colors"]
 
-    # Model tier icons
     icons = {"opus": "🔵", "sonnet": "🟣", "haiku": "🟢"}
     icon = icons.get(tier, "⚪") if config["display"]["use_emoji"] else ""
 
@@ -492,7 +670,7 @@ def build_cache_segment(data: Dict, config: Dict) -> str:
         thresholds["good_threshold"],
         thresholds["warning_threshold"],
         colors,
-        invert=True,  # Higher is better for cache
+        invert=True,
     )
 
     icon = "⚡ " if config["display"]["use_emoji"] else ""
@@ -519,6 +697,28 @@ def build_session_segment(data: Dict, config: Dict) -> str:
     bar = format_progress_bar(percentage, config, color_code)
 
     return f"{icon}{duration_str} {bar}"
+
+
+def build_tools_segment(data: Dict, config: Dict) -> str:
+    """Build the dominant tools segment."""
+    if not config["tools"]["enabled"]:
+        return ""
+
+    tools = extract_tools_info(data, config)
+
+    if not tools:
+        return ""
+
+    colors = config["colors"]
+    icon = "🔧 " if config["display"]["use_emoji"] else ""
+    color = ansi_color(colors["tools"])
+    reset = ansi_reset()
+
+    # Format: "🔧 Read:2.1k Edit:1.5k"
+    tool_strs = [f"{name}:{format_tokens_short(tokens)}" for name, tokens in tools]
+    tools_display = " ".join(tool_strs)
+
+    return f"{icon}{color}{tools_display}{reset}"
 
 
 def build_git_segment(data: Dict, config: Dict) -> str:
@@ -575,14 +775,12 @@ def build_status_line(data: Dict, config: Dict) -> str:
     separator = display_config["separator"]
     colors = config["colors"]
 
-    # Determine if compact mode should be used
     compact = display_config["compact_mode"]
     if not compact and display_config["auto_compact_width"] > 0:
         term_width = get_terminal_width()
         if term_width < display_config["auto_compact_width"]:
             compact = True
 
-    # Build enabled segments
     segments = []
 
     if segments_config["model"]:
@@ -594,7 +792,6 @@ def build_status_line(data: Dict, config: Dict) -> str:
     if segments_config["cost"]:
         segments.append(build_cost_segment(data, config))
 
-    # Skip these in compact mode
     if not compact:
         if segments_config["cache"]:
             segments.append(build_cache_segment(data, config))
@@ -602,15 +799,19 @@ def build_status_line(data: Dict, config: Dict) -> str:
         if segments_config["session"]:
             segments.append(build_session_segment(data, config))
 
+        if segments_config["tools"]:
+            tools_segment = build_tools_segment(data, config)
+            if tools_segment:
+                segments.append(tools_segment)
+
     if segments_config["git"]:
         git_segment = build_git_segment(data, config)
-        if git_segment:  # Only add if in a git repo
+        if git_segment:
             segments.append(git_segment)
 
     if segments_config["directory"] and not compact:
         segments.append(build_directory_segment(data, config))
 
-    # Join with colored separator
     sep_color = ansi_color(colors["separator"])
     reset = ansi_reset()
     colored_sep = f"{sep_color}{separator}{reset}"
@@ -626,13 +827,11 @@ def build_status_line(data: Dict, config: Dict) -> str:
 def main() -> None:
     """Main entry point."""
     try:
-        # Load configuration
         config = load_config()
 
         if config["advanced"]["debug"]:
             os.environ["ECW_DEBUG"] = "1"
 
-        # Read JSON from stdin
         input_data = sys.stdin.read().strip()
 
         if not input_data:
@@ -647,7 +846,6 @@ def main() -> None:
             print("ECW: Parse error")
             return
 
-        # Build and output status line
         status_line = build_status_line(data, config)
         print(status_line)
 

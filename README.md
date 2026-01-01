@@ -1,95 +1,87 @@
 # ECW Status Line
 
-**Evolved Claude Workflow** - A high-fidelity status line for Claude Code providing maximum visibility into session state, resource consumption, and workspace context.
+**Evolved Claude Workflow** - A single-file, self-contained status line for Claude Code providing maximum visibility into session state, resource consumption, and workspace context.
 
 ## Overview
 
-ECW Status Line displays real-time information about your Claude Code session:
-
 ```
-🟣 Sonnet | 📊 [▓▓▓▓░░░░░░] 42% | 💰 $1.23 | ⚡ 78% | ⏱️ 2h12m [▓▓▓▓░░░░░░] 44% | 🌿 main ✓ | ~/project
+🟣 Sonnet | 📊 [▓▓▓▓░░░░░░] 42% | 💰 $1.23 | ⚡ 78% | ⏱️ 2h12m [▓▓▓▓░░░░░░] 44% | 🔧 Read:2.1k Edit:1.5k | 🌿 main ✓ | ~/project
 ```
 
-### Segments (Left to Right)
+### Segments
 
 | Segment | Description | Color Logic |
 |---------|-------------|-------------|
-| **Model** | Active Claude model (Opus/Sonnet/Haiku) | Blue=Opus, Purple=Sonnet, Green=Haiku |
-| **Context** | Context window usage with progress bar | Green <65%, Yellow 65-85%, Red >85% |
-| **Cost** | Session cost (API-equivalent USD) | Green <$1, Yellow $1-5, Red >$5 |
-| **Cache** | Cache efficiency (higher = cheaper) | Green >60%, Yellow 30-60%, Red <30% |
-| **Session** | Time in 5-hour block with progress bar | Green <50%, Yellow 50-80%, Red >80% |
-| **Git** | Branch name + dirty/clean status | Green=clean, Yellow=dirty with count |
-| **Directory** | Current working directory | Gray (informational) |
+| **Model** | Active Claude model | Blue=Opus, Purple=Sonnet, Green=Haiku |
+| **Context** | Context window usage | Green <65%, Yellow 65-85%, Red >85% |
+| **Cost** | Session cost (USD) | Green <$1, Yellow $1-5, Red >$5 |
+| **Cache** | Cache efficiency | Green >60%, Yellow 30-60%, Red <30% |
+| **Session** | 5-hour block progress | Green <50%, Yellow 50-80%, Red >80% |
+| **Tools** | Dominant tools by tokens | Purple (optional, requires config) |
+| **Git** | Branch + status | Green=clean, Yellow=dirty |
+| **Directory** | Working directory | Gray |
 
 ## Requirements
 
-- Python 3.9 or later
+- Python 3.9+
 - Claude Code CLI
-- Git (optional, for git integration)
-- Terminal with 256-color and emoji support
+- Git (optional)
 
 ## Installation
 
-### 1. Clone the Repository
+### Single-File Deployment
 
 ```bash
-git clone https://github.com/your-org/ecw-statusline.git ~/.claude/ecw-statusline
+# 1. Download the script
+curl -o ~/.claude/statusline.py https://raw.githubusercontent.com/your-org/ecw-statusline/main/statusline.py
+
+# 2. Make executable
+chmod +x ~/.claude/statusline.py
+
+# 3. Add to ~/.claude/settings.json
 ```
 
-Or copy files to your preferred location.
-
-### 2. Verify Script Permissions
-
-```bash
-chmod +x ~/.claude/ecw-statusline/statusline.py
-```
-
-### 3. Configure Claude Code
-
-Add the following to your `~/.claude/settings.json`:
+Add to your `~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "python3 ~/.claude/ecw-statusline/statusline.py",
+    "command": "python3 ~/.claude/statusline.py",
     "padding": 0
   }
 }
 ```
 
-**Note**: Replace the path with your actual installation location.
-
-### 4. Verify Installation
-
-Run the test suite:
-
-```bash
-python3 ~/.claude/ecw-statusline/test_statusline.py
-```
-
-All 6 tests should pass.
+That's it. No additional files required.
 
 ## Configuration
 
-ECW Status Line is fully configurable via `config.json`. All thresholds, colors, and display options can be customized.
+ECW Status Line works out-of-the-box with sensible defaults. To customize, create an optional config file at `~/.claude/ecw-statusline-config.json`:
 
-### Configuration File Location
-
-The configuration file must be in the same directory as `statusline.py`:
-
+```json
+{
+  "context": {
+    "warning_threshold": 0.65,
+    "critical_threshold": 0.85
+  },
+  "cost": {
+    "green_max": 1.00,
+    "yellow_max": 5.00
+  },
+  "tools": {
+    "enabled": true,
+    "top_n": 3
+  },
+  "display": {
+    "compact_mode": false
+  }
+}
 ```
-~/.claude/ecw-statusline/
-├── statusline.py      # Main script
-├── config.json        # Configuration (edit this)
-├── config.yaml        # YAML reference (documentation only)
-└── test_statusline.py # Test suite
-```
 
-### Key Configuration Options
+Only specify values you want to override. All other settings use defaults.
 
-#### Display Mode
+### All Configuration Options
 
 ```json
 {
@@ -104,36 +96,17 @@ The configuration file must be in the same directory as `statusline.py`:
       "empty_char": "░",
       "show_percentage": true
     }
-  }
-}
-```
-
-- `compact_mode`: Enable reduced segment display for small terminals
-- `auto_compact_width`: Terminal width threshold for automatic compact mode (0 to disable)
-- `use_emoji`: Toggle emoji icons on/off
-
-#### Segment Visibility
-
-```json
-{
+  },
   "segments": {
     "model": true,
     "context": true,
     "cost": true,
     "cache": true,
     "session": true,
+    "tools": true,
     "git": true,
     "directory": true
-  }
-}
-```
-
-Set any segment to `false` to hide it.
-
-#### Thresholds
-
-```json
-{
+  },
   "context": {
     "warning_threshold": 0.65,
     "critical_threshold": 0.85
@@ -150,14 +123,24 @@ Set any segment to `false` to hide it.
     "block_duration_seconds": 18000,
     "green_threshold": 0.50,
     "yellow_threshold": 0.80
-  }
-}
-```
-
-#### Colors (ANSI 256)
-
-```json
-{
+  },
+  "tools": {
+    "enabled": false,
+    "top_n": 3,
+    "min_tokens": 100,
+    "cache_ttl_seconds": 5
+  },
+  "git": {
+    "show_branch": true,
+    "show_status": true,
+    "show_uncommitted_count": true,
+    "max_branch_length": 20
+  },
+  "directory": {
+    "abbreviate_home": true,
+    "max_length": 25,
+    "basename_only": false
+  },
   "colors": {
     "green": 82,
     "yellow": 220,
@@ -168,59 +151,95 @@ Set any segment to `false` to hide it.
     "separator": 240,
     "directory": 250,
     "git_clean": 82,
-    "git_dirty": 220
+    "git_dirty": 220,
+    "tools": 147
+  },
+  "advanced": {
+    "handle_cumulative_bug": true,
+    "git_timeout": 2,
+    "debug": false
   }
 }
 ```
 
-Reference: [ANSI 256 Color Chart](https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit)
+## Tools Segment
+
+The tools segment parses the Claude Code transcript JSONL file to show which tools are consuming the most tokens:
+
+```
+🔧 Read:2.1k Edit:1.5k Bash:500
+```
+
+**To enable:**
+
+```json
+{
+  "tools": {
+    "enabled": true,
+    "top_n": 3,
+    "min_tokens": 100,
+    "cache_ttl_seconds": 5
+  }
+}
+```
+
+- `enabled`: Must be `true` to activate (default: `false`)
+- `top_n`: Number of top tools to display
+- `min_tokens`: Minimum tokens for a tool to appear
+- `cache_ttl_seconds`: How long to cache transcript parsing results
 
 ## Compact Mode
 
-When enabled (or auto-triggered by terminal width), compact mode shows only essential segments:
+For smaller terminals, compact mode shows only essential segments:
 
 ```
 🟣 Sonnet | 📊 [▓▓▓▓░░░░░░] 42% | 💰 $1.23 | 🌿 main ✓
 ```
 
-Segments hidden in compact mode: Cache, Session, Directory
+Enable via config or auto-trigger based on terminal width:
+
+```json
+{
+  "display": {
+    "compact_mode": true
+  }
+}
+```
+
+Or auto-compact when terminal is narrow:
+
+```json
+{
+  "display": {
+    "auto_compact_width": 80
+  }
+}
+```
 
 ## Known Limitations
 
-Based on verified documentation from Claude Code:
-
 | Feature | Status | Reason |
 |---------|--------|--------|
-| Subscription type display | Not available | JSON payload doesn't include plan info |
-| Per-tool token breakdown | Not available | JSON provides only aggregate totals |
-| Operation-level tokens | Not available | Not implemented by Anthropic |
-| Accurate context after auto-compact | Partial | Known bug (GitHub Issue #13783) |
+| Subscription type | Not available | Not in JSON payload |
+| Per-tool breakdown | Available | Via transcript parsing |
+| Accurate context after auto-compact | Partial | Known bug ([#13783](https://github.com/anthropics/claude-code/issues/13783)) |
 
-### Context Window Bug Handling
+### Context Window Bug
 
-Claude Code has a [known bug](https://github.com/anthropics/claude-code/issues/13783) where cumulative token counts exceed the context window after auto-compact runs. ECW Status Line handles this by:
-
-1. Using `current_usage` fields when available (more accurate)
-2. Displaying a `~` prefix when values are estimated
-3. Allowing percentage to exceed 100% to make the issue visible
+Claude Code has a known bug where cumulative tokens exceed context window after auto-compact. ECW Status Line handles this by:
+1. Using `current_usage` fields when available
+2. Displaying `~` prefix for estimated values
+3. Allowing percentage to exceed 100%
 
 ## Troubleshooting
 
-### Status Line Not Appearing
-
-1. Verify the path in `~/.claude/settings.json` is correct
-2. Ensure `statusline.py` is executable: `chmod +x statusline.py`
-3. Test manually: `echo '{"model":{"display_name":"Test"}}' | python3 statusline.py`
-
 ### Debug Mode
-
-Enable debug logging by setting the environment variable:
 
 ```bash
 export ECW_DEBUG=1
 ```
 
-Or set in `config.json`:
+Or in config:
 
 ```json
 {
@@ -230,85 +249,36 @@ Or set in `config.json`:
 }
 ```
 
-Debug output goes to stderr and won't affect the status line display.
+### Test Manually
 
-### Git Information Not Showing
-
-1. Ensure you're in a git repository
-2. Check git is installed: `which git`
-3. Increase timeout if git is slow: `"git_timeout": 5` in config
+```bash
+echo '{"model":{"display_name":"Test"}}' | python3 ~/.claude/statusline.py
+```
 
 ## Testing
 
-Run the test suite to verify your installation:
-
 ```bash
-cd ~/.claude/ecw-statusline
 python3 test_statusline.py
 ```
 
-Expected output: `RESULTS: 6 passed, 0 failed`
-
-### Test Cases
-
-| Test | Description |
-|------|-------------|
-| Normal Session | All metrics in green zone |
-| Warning State | Context and cost in yellow zone |
-| Critical State | All metrics in red zone |
-| Bug Simulation | Cumulative tokens exceed window |
-| Haiku Model | Verifies model tier detection |
-| Minimal Payload | Edge case with missing fields |
-
-## Architecture
-
-```
-statusline.py
-├── Configuration Loading (load_config, deep_merge)
-├── Data Extraction
-│   ├── extract_model_info()
-│   ├── extract_context_info()
-│   ├── extract_cost_info()
-│   ├── extract_cache_info()
-│   ├── extract_session_block_info()
-│   └── extract_workspace_info()
-├── Git Integration (get_git_info)
-├── Formatting (format_progress_bar, format_duration)
-├── Segment Builders
-│   ├── build_model_segment()
-│   ├── build_context_segment()
-│   ├── build_cost_segment()
-│   ├── build_cache_segment()
-│   ├── build_session_segment()
-│   ├── build_git_segment()
-│   └── build_directory_segment()
-└── Main Builder (build_status_line)
-```
+Expected: `RESULTS: 8 passed, 0 failed`
 
 ## Version History
 
+- **2.0.0** - Single-file refactor
+  - Self-contained Python script (no external files required)
+  - Added Tools segment with transcript parsing
+  - Added caching for transcript parsing
+  - Removed external config files (embedded defaults)
+  - JSON-only configuration
+
 - **1.0.0** - Initial release
-  - Full segment display with configurable thresholds
-  - Color-coded warnings for context, cost, cache, session
-  - Git integration with branch and status
-  - Compact mode support
-  - Known bug handling for cumulative tokens
-  - Python 3.9+ compatibility (stdlib only)
 
 ## License
 
-MIT License
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Run tests: `python3 test_statusline.py`
-4. Submit a pull request
+MIT
 
 ## References
 
 - [Claude Code Status Line Documentation](https://code.claude.com/docs/en/statusline)
-- [GitHub Issue #5404 - Statusline feature documentation](https://github.com/anthropics/claude-code/issues/5404)
-- [GitHub Issue #13783 - Context window cumulative bug](https://github.com/anthropics/claude-code/issues/13783)
-- [MAX Plan Pricing](https://claude.com/pricing/max)
+- [GitHub Issue #13783 - Context window bug](https://github.com/anthropics/claude-code/issues/13783)
