@@ -1,0 +1,79 @@
+{
+  "_comment": "ECW Status Line Configuration - Evolved Claude Workflow v1.0.0",
+
+  "display": {
+    "compact_mode": false,
+    "auto_compact_width": 80,
+    "separator": " | ",
+    "use_emoji": true,
+    "progress_bar": {
+      "width": 10,
+      "filled_char": "\u2593",
+      "empty_char": "\u2591",
+      "show_percentage": true
+    }
+  },
+
+  "segments": {
+    "model": true,
+    "context": true,
+    "cost": true,
+    "cache": true,
+    "session": true,
+    "git": true,
+    "directory": true
+  },
+
+  "context": {
+    "warning_threshold": 0.65,
+    "critical_threshold": 0.85
+  },
+
+  "cost": {
+    "green_max": 1.00,
+    "yellow_max": 5.00
+  },
+
+  "cache": {
+    "good_threshold": 0.60,
+    "warning_threshold": 0.30
+  },
+
+  "session": {
+    "block_duration_seconds": 18000,
+    "green_threshold": 0.50,
+    "yellow_threshold": 0.80
+  },
+
+  "git": {
+    "show_branch": true,
+    "show_status": true,
+    "show_uncommitted_count": true,
+    "max_branch_length": 20
+  },
+
+  "directory": {
+    "abbreviate_home": true,
+    "max_length": 25,
+    "basename_only": false
+  },
+
+  "colors": {
+    "green": 82,
+    "yellow": 220,
+    "red": 196,
+    "opus": 75,
+    "sonnet": 141,
+    "haiku": 84,
+    "separator": 240,
+    "directory": 250,
+    "git_clean": 82,
+    "git_dirty": 220
+  },
+
+  "advanced": {
+    "handle_cumulative_bug": true,
+    "git_timeout": 2,
+    "debug": false
+  }
+}

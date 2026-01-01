@@ -1,0 +1,156 @@
+# ECW Status Line Configuration
+# Evolved Claude Workflow - Status Line for Claude Code
+# Version: 1.0.0
+#
+# All thresholds and display options are configurable.
+# Reload: Changes take effect on next status line update (~300ms)
+
+# =============================================================================
+# DISPLAY MODE
+# =============================================================================
+display:
+  # Compact mode reduces segments for smaller terminals
+  # When enabled, only shows: MODEL | CONTEXT | COST | GIT
+  compact_mode: false
+
+  # Minimum terminal width before auto-switching to compact mode
+  # Set to 0 to disable auto-switching
+  auto_compact_width: 80
+
+  # Segment separator character
+  separator: " | "
+
+  # Use emoji icons (disable for minimal terminals)
+  use_emoji: true
+
+  # Progress bar style
+  progress_bar:
+    # Width in characters (not including brackets)
+    width: 10
+    # Characters for filled/empty portions
+    filled_char: "▓"
+    empty_char: "░"
+    # Show percentage number alongside bar
+    show_percentage: true
+
+# =============================================================================
+# SEGMENT VISIBILITY
+# Disable segments you don't need
+# =============================================================================
+segments:
+  model: true
+  context: true
+  cost: true
+  cache: true
+  session: true
+  git: true
+  directory: true
+
+# =============================================================================
+# CONTEXT WINDOW THRESHOLDS
+# Percentage of context window usage
+# =============================================================================
+context:
+  # Threshold for yellow warning (user specified: 65%)
+  warning_threshold: 0.65
+  # Threshold for red critical
+  critical_threshold: 0.85
+
+# =============================================================================
+# COST THRESHOLDS (USD)
+# API-equivalent cost per session
+# Based on MAX 20 plan economics
+# =============================================================================
+cost:
+  # Green: normal usage
+  green_max: 1.00
+  # Yellow: moderate usage (above this = yellow)
+  yellow_max: 5.00
+  # Above yellow_max = red (heavy session)
+
+# =============================================================================
+# CACHE EFFICIENCY THRESHOLDS
+# Higher cache hit rate = lower cost (cached tokens cost 90% less)
+# =============================================================================
+cache:
+  # Green: excellent cache utilization
+  good_threshold: 0.60
+  # Yellow: moderate cache utilization
+  warning_threshold: 0.30
+  # Below warning_threshold = red (poor cache utilization)
+
+# =============================================================================
+# SESSION BLOCK THRESHOLDS
+# Based on Anthropic's 5-hour rolling window for rate limits
+# =============================================================================
+session:
+  # 5-hour window in seconds
+  block_duration_seconds: 18000
+  # Green: comfortable pace
+  green_threshold: 0.50
+  # Yellow: approaching limit
+  yellow_threshold: 0.80
+  # Above yellow = red
+
+# =============================================================================
+# GIT INTEGRATION
+# =============================================================================
+git:
+  # Show branch name
+  show_branch: true
+  # Show dirty/clean indicator
+  show_status: true
+  # Show count of uncommitted files
+  show_uncommitted_count: true
+  # Maximum branch name length (truncate with ...)
+  max_branch_length: 20
+
+# =============================================================================
+# DIRECTORY DISPLAY
+# =============================================================================
+directory:
+  # Abbreviate home directory as ~
+  abbreviate_home: true
+  # Maximum path length (truncate from left with ...)
+  max_length: 25
+  # Show only basename instead of path
+  basename_only: false
+
+# =============================================================================
+# COLOR SCHEME (ANSI 256 colors)
+# Format: foreground color code (0-255) or "default"
+# Reference: https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit
+# =============================================================================
+colors:
+  # Status colors
+  green: 82        # Bright green
+  yellow: 220      # Bright yellow/orange
+  red: 196         # Bright red
+
+  # Model colors (by tier)
+  opus: 75         # Blue (expensive)
+  sonnet: 141      # Purple (moderate)
+  haiku: 84        # Green (cheap)
+
+  # Segment-specific colors
+  separator: 240   # Dark gray
+  directory: 250   # Light gray
+  git_clean: 82    # Green
+  git_dirty: 220   # Yellow
+
+  # Reset code (do not modify)
+  reset: 0
+
+# =============================================================================
+# ADVANCED OPTIONS
+# =============================================================================
+advanced:
+  # Handle the known bug where cumulative tokens exceed context window
+  # When detected, display "~" prefix to indicate estimated value
+  handle_cumulative_bug: true
+
+  # Timeout for git commands in seconds
+  git_timeout: 2
+
+  # Log debug information to stderr (for troubleshooting)
+  debug: false
