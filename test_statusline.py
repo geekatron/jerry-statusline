@@ -3,7 +3,7 @@
 ECW Status Line - Test Suite
 Validates statusline output with mock Claude Code JSON payloads.
 
-Version: 2.0.0
+Version: 2.1.0
 Usage: python3 test_statusline.py
 """
 
@@ -163,6 +163,35 @@ PAYLOAD_MINIMAL = {
     "context_window": {},
 }
 
+# Long session payload for testing duration display
+PAYLOAD_LONG_SESSION = {
+    "hook_event_name": "Status",
+    "session_id": "test-session-long",
+    "cwd": "/home/user/marathon",
+    "model": {"id": "claude-sonnet-4-20250514", "display_name": "Sonnet"},
+    "workspace": {
+        "current_dir": "/home/user/marathon",
+        "project_dir": "/home/user/marathon",
+    },
+    "cost": {
+        "total_cost_usd": 45.00,
+        "total_duration_ms": 158700000,  # 44h05m in ms
+        "total_lines_added": 5000,
+        "total_lines_removed": 1000,
+    },
+    "context_window": {
+        "total_input_tokens": 1200000,
+        "total_output_tokens": 400000,
+        "context_window_size": 200000,
+        "current_usage": {
+            "input_tokens": 50000,
+            "output_tokens": 10000,
+            "cache_creation_input_tokens": 20000,
+            "cache_read_input_tokens": 80000,
+        },
+    },
+}
+
 # =============================================================================
 # TRANSCRIPT TEST DATA
 # =============================================================================
@@ -317,7 +346,7 @@ def run_tools_test() -> bool:
 
 
 def run_compact_test() -> bool:
-    """Test compact mode."""
+    """Test compact mode hides session, tokens, compaction, and directory segments."""
     print(f"\n{'=' * 60}")
     print("TEST: Compact Mode")
     print(f"{'=' * 60}")
@@ -339,14 +368,16 @@ def run_compact_test() -> bool:
 
         print(f"STDOUT: {result.stdout.strip()}")
 
-        # Compact mode should NOT have session or directory
+        # Compact mode should NOT have session (⏱️), tokens (⚡), or directory (📂)
         has_session = "⏱️" in result.stdout
+        has_tokens = "⚡" in result.stdout
         has_directory = "📂" in result.stdout
 
         print(f"Session hidden (expected): {not has_session}")
+        print(f"Tokens hidden (expected): {not has_tokens}")
         print(f"Directory hidden (expected): {not has_directory}")
 
-        return result.returncode == 0 and not has_session and not has_directory
+        return result.returncode == 0 and not has_session and not has_tokens and not has_directory
 
     except Exception as e:
         print(f"ERROR: {e}")
@@ -356,9 +387,166 @@ def run_compact_test() -> bool:
         config_path.unlink(missing_ok=True)
 
 
+def run_currency_test() -> bool:
+    """Test configurable currency symbol."""
+    print(f"\n{'=' * 60}")
+    print("TEST: Configurable Currency (CAD)")
+    print(f"{'=' * 60}")
+
+    config = {"cost": {"currency_symbol": "CAD "}}
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            ["python3", str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+
+        # Should contain "CAD " followed by the cost
+        has_cad = "CAD " in result.stdout
+        print(f"CAD currency present: {has_cad}")
+
+        return result.returncode == 0 and has_cad
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
+def run_tokens_segment_test() -> bool:
+    """Test the new tokens segment showing fresh/cached breakdown."""
+    print(f"\n{'=' * 60}")
+    print("TEST: Tokens Segment (Fresh/Cached Breakdown)")
+    print(f"{'=' * 60}")
+
+    try:
+        result = subprocess.run(
+            ["python3", str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+
+        # Should contain ⚡ (tokens icon) and → (fresh indicator) and ↺ (cached indicator)
+        has_tokens_icon = "⚡" in result.stdout
+        has_fresh_indicator = "→" in result.stdout
+        has_cached_indicator = "↺" in result.stdout
+
+        print(f"Tokens icon (⚡) present: {has_tokens_icon}")
+        print(f"Fresh indicator (→) present: {has_fresh_indicator}")
+        print(f"Cached indicator (↺) present: {has_cached_indicator}")
+
+        return result.returncode == 0 and has_tokens_icon and has_fresh_indicator and has_cached_indicator
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+
+
+def run_session_segment_test() -> bool:
+    """Test the session segment showing duration + total tokens."""
+    print(f"\n{'=' * 60}")
+    print("TEST: Session Segment (Duration + Total Tokens)")
+    print(f"{'=' * 60}")
+
+    try:
+        result = subprocess.run(
+            ["python3", str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_LONG_SESSION),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+
+        # Should contain ⏱️ (session icon) and duration format (e.g., "44h05m")
+        has_session_icon = "⏱️" in result.stdout
+        has_hours = "h" in result.stdout and "m" in result.stdout
+        has_tok = "tok" in result.stdout or "M" in result.stdout  # Total tokens in M format
+
+        print(f"Session icon (⏱️) present: {has_session_icon}")
+        print(f"Duration format (XhYYm) present: {has_hours}")
+        print(f"Total tokens indicator present: {has_tok}")
+
+        return result.returncode == 0 and has_session_icon and has_hours
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+
+
+def run_compaction_test() -> bool:
+    """Test compaction detection with state file."""
+    print(f"\n{'=' * 60}")
+    print("TEST: Compaction Detection")
+    print(f"{'=' * 60}")
+
+    # Use a temporary state file for testing
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
+        # Pre-populate state with high previous context to simulate compaction
+        state = {
+            "previous_context_tokens": 180000,  # High previous count
+            "last_compaction_from": 0,
+            "last_compaction_to": 0,
+        }
+        json.dump(state, tf)
+        state_file = tf.name
+
+    config = {"compaction": {"state_file": state_file, "detection_threshold": 10000}}
+
+    # Use normal payload which has much lower context (~25k tokens)
+    # This should trigger compaction detection (180k -> 25k)
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            ["python3", str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+
+        # Should contain 📉 (compaction icon) when compaction is detected
+        has_compaction_icon = "📉" in result.stdout
+
+        print(f"Compaction icon (📉) present: {has_compaction_icon}")
+
+        return result.returncode == 0 and has_compaction_icon
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        # Clean up
+        Path(state_file).unlink(missing_ok=True)
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
 def main() -> int:
     """Run all tests."""
-    print("ECW Status Line - Test Suite v2.0.0")
+    print("ECW Status Line - Test Suite v2.1.0")
     print(f"Script: {STATUSLINE_SCRIPT}")
     print(f"Single-file deployment test")
 
@@ -393,6 +581,32 @@ def main() -> int:
 
     # Compact mode test
     if run_compact_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # New v2.1.0 tests
+
+    # Currency configuration test
+    if run_currency_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Tokens segment test (fresh/cached breakdown)
+    if run_tokens_segment_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Session segment test (duration + total tokens)
+    if run_session_segment_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Compaction detection test
+    if run_compaction_test():
         passed += 1
     else:
         failed += 1

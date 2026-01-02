@@ -3,16 +3,19 @@
 ECW Status Line - Evolved Claude Workflow
 Single-file, self-contained status line for Claude Code.
 
-Version: 2.0.0
+Version: 2.1.0
 Python: 3.9+ (stdlib only, zero dependencies)
 License: MIT
 
 Features:
-- 8 segments: Model, Context, Cost, Cache, Session, Tools, Git, Directory
+- 8 segments: Model, Context, Cost, Tokens, Session, Tools, Git, Directory
 - Color-coded thresholds (green/yellow/red)
+- Configurable currency symbol
+- Token breakdown (fresh vs cached)
+- Session duration with total tokens consumed
+- Compaction detection with token delta
 - Transcript JSONL parsing for per-tool token breakdown
 - Compact mode for smaller terminals
-- Optional config override via external JSON file
 
 Installation:
     1. Copy this file to ~/.claude/statusline.py
@@ -33,7 +36,6 @@ Configuration:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
@@ -46,7 +48,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # VERSION
 # =============================================================================
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # =============================================================================
 # DEFAULT CONFIGURATION (embedded - no external file required)
@@ -71,9 +73,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "model": True,
         "context": True,
         "cost": True,
-        "cache": True,
-        "session": True,
-        "tools": True,  # NEW: Dominant tools segment
+        "tokens": True,      # Renamed from 'cache' - shows fresh/cached breakdown
+        "session": True,     # Now shows duration + total tokens
+        "compaction": True,  # NEW: Shows token delta after compaction
+        "tools": True,
         "git": True,
         "directory": True,
     },
@@ -82,28 +85,35 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "warning_threshold": 0.65,
         "critical_threshold": 0.85,
     },
-    # Cost thresholds (USD)
+    # Cost settings
     "cost": {
+        "currency_symbol": "$",  # Configurable: "$", "CAD", "€", etc.
         "green_max": 1.00,
         "yellow_max": 5.00,
     },
-    # Cache efficiency thresholds
-    "cache": {
-        "good_threshold": 0.60,
-        "warning_threshold": 0.30,
+    # Token breakdown settings (fresh vs cached)
+    "tokens": {
+        # Threshold for "high fresh tokens" warning (tokens per update)
+        "fresh_warning": 5000,
+        "fresh_critical": 20000,
     },
-    # Session block thresholds (5-hour window)
+    # Session settings
     "session": {
-        "block_duration_seconds": 18000,
-        "green_threshold": 0.50,
-        "yellow_threshold": 0.80,
+        # No more block duration - just shows duration + total tokens
+    },
+    # Compaction detection
+    "compaction": {
+        # Minimum token drop to consider as compaction (vs normal variation)
+        "detection_threshold": 10000,
+        # State file for tracking previous token counts
+        "state_file": "~/.claude/ecw-statusline-state.json",
     },
     # Tools segment settings
     "tools": {
         "enabled": False,  # Disabled by default (requires transcript parsing)
-        "top_n": 3,  # Show top N tools by token usage
-        "min_tokens": 100,  # Minimum tokens to display a tool
-        "cache_ttl_seconds": 5,  # Cache TTL for transcript parsing
+        "top_n": 3,
+        "min_tokens": 100,
+        "cache_ttl_seconds": 5,
     },
     # Git settings
     "git": {
@@ -123,6 +133,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "green": 82,
         "yellow": 220,
         "red": 196,
+        "cyan": 87,      # For informational displays
         "opus": 75,
         "sonnet": 141,
         "haiku": 84,
@@ -130,7 +141,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "directory": 250,
         "git_clean": 82,
         "git_dirty": 220,
-        "tools": 147,  # Light purple for tools
+        "tools": 147,
+        "tokens_fresh": 214,   # Orange for fresh tokens
+        "tokens_cached": 81,   # Cyan for cached tokens
+        "compaction": 213,     # Pink for compaction indicator
     },
     # Advanced settings
     "advanced": {
@@ -144,13 +158,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # CONFIGURATION LOADING
 # =============================================================================
 
-# Config file search paths (in order of priority)
 CONFIG_PATHS = [
     Path(__file__).parent / "ecw-statusline-config.json",
     Path.home() / ".claude" / "ecw-statusline-config.json",
 ]
 
-# Transcript cache
 _transcript_cache: Dict[str, Tuple[float, Dict[str, int]]] = {}
 
 
@@ -158,7 +170,6 @@ def load_config() -> Dict[str, Any]:
     """Load configuration from embedded defaults with optional file override."""
     config = deep_copy(DEFAULT_CONFIG)
 
-    # Try to load external config file
     for config_path in CONFIG_PATHS:
         if config_path.exists():
             try:
@@ -197,6 +208,37 @@ def debug_log(message: str) -> None:
     """Log debug message to stderr if debug mode enabled."""
     if os.environ.get("ECW_DEBUG") == "1":
         print(f"[ECW-DEBUG] {message}", file=sys.stderr)
+
+
+# =============================================================================
+# STATE MANAGEMENT (for compaction detection)
+# =============================================================================
+
+
+def load_state(config: Dict) -> Dict[str, Any]:
+    """Load previous state for compaction detection."""
+    state_file = Path(os.path.expanduser(config["compaction"]["state_file"]))
+
+    if state_file.exists():
+        try:
+            with open(state_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            debug_log(f"State load error: {e}")
+
+    return {"previous_context_tokens": 0, "last_compaction_from": 0, "last_compaction_to": 0}
+
+
+def save_state(config: Dict, state: Dict[str, Any]) -> None:
+    """Save current state for next invocation."""
+    state_file = Path(os.path.expanduser(config["compaction"]["state_file"]))
+
+    try:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+    except IOError as e:
+        debug_log(f"State save error: {e}")
 
 
 # =============================================================================
@@ -241,19 +283,12 @@ def safe_get(data: Dict, *keys, default: Any = None) -> Any:
 
 
 # =============================================================================
-# TRANSCRIPT JSONL PARSING (for per-tool token breakdown)
+# TRANSCRIPT JSONL PARSING
 # =============================================================================
 
 
-def parse_transcript_for_tools(
-    transcript_path: str, config: Dict
-) -> Dict[str, int]:
-    """
-    Parse transcript JSONL file to extract per-tool token usage.
-    Uses caching to avoid re-parsing on every status update.
-
-    Returns: Dict mapping tool names to token counts.
-    """
+def parse_transcript_for_tools(transcript_path: str, config: Dict) -> Dict[str, int]:
+    """Parse transcript JSONL file to extract per-tool token usage."""
     tools_config = config["tools"]
 
     if not tools_config["enabled"]:
@@ -263,7 +298,6 @@ def parse_transcript_for_tools(
         debug_log(f"Transcript not found: {transcript_path}")
         return {}
 
-    # Check cache
     cache_key = transcript_path
     cache_ttl = tools_config["cache_ttl_seconds"]
     now = datetime.now().timestamp()
@@ -274,7 +308,6 @@ def parse_transcript_for_tools(
             debug_log("Using cached transcript data")
             return cached_data
 
-    # Parse transcript
     tool_tokens: Dict[str, int] = {}
 
     try:
@@ -289,7 +322,6 @@ def parse_transcript_for_tools(
                 except json.JSONDecodeError:
                     continue
 
-        # Cache the result
         _transcript_cache[cache_key] = (now, tool_tokens)
         debug_log(f"Parsed transcript: {tool_tokens}")
 
@@ -302,37 +334,27 @@ def parse_transcript_for_tools(
 
 def _extract_tool_usage(entry: Dict, tool_tokens: Dict[str, int]) -> None:
     """Extract tool usage from a transcript entry."""
-    # Look for tool use in various message formats
     message = entry.get("message", {})
-
-    # Check for tool_use content blocks
     content = message.get("content", [])
+
     if isinstance(content, list):
         for block in content:
             if isinstance(block, dict):
                 block_type = block.get("type", "")
                 if block_type == "tool_use":
                     tool_name = block.get("name", "unknown")
-                    # Estimate tokens from input size (rough approximation)
                     input_data = block.get("input", {})
                     token_estimate = _estimate_tokens(input_data)
                     tool_tokens[tool_name] = tool_tokens.get(tool_name, 0) + token_estimate
-
                 elif block_type == "tool_result":
-                    # Tool results also consume tokens
-                    tool_name = block.get("tool_use_id", "result")
                     content_data = block.get("content", "")
                     token_estimate = _estimate_tokens(content_data)
-                    # Attribute to generic "results" category
                     tool_tokens["results"] = tool_tokens.get("results", 0) + token_estimate
 
-    # Check for usage stats in the entry
     usage = entry.get("usage", {})
     if usage:
-        # If we have actual usage data, use it
         input_tokens = usage.get("input_tokens", 0)
         output_tokens = usage.get("output_tokens", 0)
-        # Attribute to the message type
         role = message.get("role", "unknown")
         if role == "assistant":
             tool_tokens["assistant"] = tool_tokens.get("assistant", 0) + output_tokens
@@ -344,9 +366,7 @@ def _estimate_tokens(data: Any) -> int:
     """Estimate token count from data (rough: ~4 chars per token)."""
     if isinstance(data, str):
         return len(data) // 4
-    elif isinstance(data, dict):
-        return len(json.dumps(data)) // 4
-    elif isinstance(data, list):
+    elif isinstance(data, (dict, list)):
         return len(json.dumps(data)) // 4
     return 0
 
@@ -372,14 +392,8 @@ def extract_model_info(data: Dict) -> Tuple[str, str]:
 
 
 def extract_context_info(data: Dict, config: Dict) -> Tuple[float, int, int, bool]:
-    """
-    Extract context window usage.
-    Returns: (percentage, used_tokens, total_tokens, is_estimated)
-    """
-    context_window_size = safe_get(
-        data, "context_window", "context_window_size", default=200000
-    )
-
+    """Extract context window usage."""
+    context_window_size = safe_get(data, "context_window", "context_window_size", default=200000)
     current_usage = safe_get(data, "context_window", "current_usage")
 
     if current_usage:
@@ -400,42 +414,87 @@ def extract_context_info(data: Dict, config: Dict) -> Tuple[float, int, int, boo
     return percentage, used_tokens, context_window_size, is_estimated
 
 
-def extract_cost_info(data: Dict) -> Tuple[float, int, int]:
+def extract_cost_info(data: Dict) -> Tuple[float, int]:
     """Extract cost and duration info."""
-    cost_usd = safe_get(data, "cost", "total_cost_usd", default=0.0)
+    cost = safe_get(data, "cost", "total_cost_usd", default=0.0)
     duration_ms = safe_get(data, "cost", "total_duration_ms", default=0)
-    lines_added = safe_get(data, "cost", "total_lines_added", default=0)
-    lines_removed = safe_get(data, "cost", "total_lines_removed", default=0)
-
-    return cost_usd, duration_ms, lines_added - lines_removed
+    return cost, duration_ms
 
 
-def extract_cache_info(data: Dict) -> float:
-    """Calculate cache efficiency ratio."""
+def extract_token_breakdown(data: Dict) -> Tuple[int, int]:
+    """
+    Extract fresh vs cached token breakdown.
+    Returns: (fresh_tokens, cached_tokens)
+    """
     current_usage = safe_get(data, "context_window", "current_usage")
 
     if not current_usage:
-        return 0.0
+        return 0, 0
 
-    input_tokens = safe_get(current_usage, "input_tokens", default=0)
-    cache_read = safe_get(current_usage, "cache_read_input_tokens", default=0)
+    fresh_tokens = safe_get(current_usage, "input_tokens", default=0)
+    cached_tokens = safe_get(current_usage, "cache_read_input_tokens", default=0)
 
-    total_input = input_tokens + cache_read
-    if total_input == 0:
-        return 0.0
-
-    return cache_read / total_input
+    return fresh_tokens, cached_tokens
 
 
-def extract_session_block_info(data: Dict, config: Dict) -> Tuple[float, int]:
-    """Calculate progress through 5-hour session block."""
+def extract_session_info(data: Dict) -> Tuple[int, int, int]:
+    """
+    Extract session duration and total tokens consumed.
+    Returns: (elapsed_seconds, total_input_tokens, total_output_tokens)
+    """
     duration_ms = safe_get(data, "cost", "total_duration_ms", default=0)
     elapsed_seconds = duration_ms // 1000
 
-    block_duration = config["session"]["block_duration_seconds"]
-    percentage = elapsed_seconds / block_duration if block_duration > 0 else 0
+    total_input = safe_get(data, "context_window", "total_input_tokens", default=0)
+    total_output = safe_get(data, "context_window", "total_output_tokens", default=0)
 
-    return min(percentage, 1.0), elapsed_seconds
+    return elapsed_seconds, total_input, total_output
+
+
+def extract_compaction_info(data: Dict, config: Dict) -> Tuple[bool, int, int]:
+    """
+    Detect compaction by comparing current context to previous.
+    Returns: (compaction_detected, from_tokens, to_tokens)
+    """
+    current_usage = safe_get(data, "context_window", "current_usage")
+
+    if not current_usage:
+        return False, 0, 0
+
+    # Calculate current context size
+    input_tokens = safe_get(current_usage, "input_tokens", default=0)
+    cache_creation = safe_get(current_usage, "cache_creation_input_tokens", default=0)
+    cache_read = safe_get(current_usage, "cache_read_input_tokens", default=0)
+    current_context = input_tokens + cache_creation + cache_read
+
+    # Load previous state
+    state = load_state(config)
+    previous_context = state.get("previous_context_tokens", 0)
+    threshold = config["compaction"]["detection_threshold"]
+
+    # Detect significant drop (compaction)
+    compaction_detected = False
+    from_tokens = state.get("last_compaction_from", 0)
+    to_tokens = state.get("last_compaction_to", 0)
+
+    if previous_context > 0 and (previous_context - current_context) > threshold:
+        # Compaction detected!
+        compaction_detected = True
+        from_tokens = previous_context
+        to_tokens = current_context
+        state["last_compaction_from"] = from_tokens
+        state["last_compaction_to"] = to_tokens
+        debug_log(f"Compaction detected: {from_tokens} -> {to_tokens}")
+
+    # Update state with current context
+    state["previous_context_tokens"] = current_context
+    save_state(config, state)
+
+    # If we detected compaction this round OR we have recent compaction data
+    if compaction_detected or (from_tokens > 0 and to_tokens > 0):
+        return True, from_tokens, to_tokens
+
+    return False, 0, 0
 
 
 def extract_workspace_info(data: Dict, config: Dict) -> str:
@@ -471,7 +530,6 @@ def extract_tools_info(data: Dict, config: Dict) -> List[Tuple[str, int]]:
     min_tokens = tools_config["min_tokens"]
     top_n = tools_config["top_n"]
 
-    # Filter and sort
     filtered = [(name, tokens) for name, tokens in tool_tokens.items() if tokens >= min_tokens]
     sorted_tools = sorted(filtered, key=lambda x: x[1], reverse=True)
 
@@ -569,8 +627,10 @@ def format_duration(seconds: int) -> str:
 
 
 def format_tokens_short(tokens: int) -> str:
-    """Format token count in short form (e.g., 1.2k, 15k)."""
-    if tokens >= 1000:
+    """Format token count in short form (e.g., 1.2k, 15k, 1.5M)."""
+    if tokens >= 1000000:
+        return f"{tokens / 1000000:.1f}M"
+    elif tokens >= 1000:
         return f"{tokens / 1000:.1f}k"
     return str(tokens)
 
@@ -643,60 +703,83 @@ def build_context_segment(data: Dict, config: Dict) -> str:
 
 
 def build_cost_segment(data: Dict, config: Dict) -> str:
-    """Build the cost display segment."""
-    cost_usd, _, _ = extract_cost_info(data)
+    """Build the cost display segment with configurable currency."""
+    cost, _ = extract_cost_info(data)
     colors = config["colors"]
-    thresholds = config["cost"]
+    cost_config = config["cost"]
 
     color_code = get_threshold_color(
-        cost_usd, thresholds["green_max"], thresholds["yellow_max"], colors
+        cost, cost_config["green_max"], cost_config["yellow_max"], colors
     )
 
-    icon = "💰 " if config["display"]["use_emoji"] else "$"
+    currency = cost_config["currency_symbol"]
+    icon = "💰 " if config["display"]["use_emoji"] else ""
     color = ansi_color(color_code)
     reset = ansi_reset()
 
-    return f"{icon}{color}${cost_usd:.2f}{reset}"
+    return f"{icon}{color}{currency}{cost:.2f}{reset}"
 
 
-def build_cache_segment(data: Dict, config: Dict) -> str:
-    """Build the cache efficiency segment."""
-    cache_ratio = extract_cache_info(data)
+def build_tokens_segment(data: Dict, config: Dict) -> str:
+    """
+    Build the token breakdown segment.
+    Format: ⚡ 500→ 45.2k↺
+    Where → = fresh tokens, ↺ = cached tokens
+    """
+    fresh, cached = extract_token_breakdown(data)
     colors = config["colors"]
-    thresholds = config["cache"]
-
-    color_code = get_threshold_color(
-        cache_ratio,
-        thresholds["good_threshold"],
-        thresholds["warning_threshold"],
-        colors,
-        invert=True,
-    )
 
     icon = "⚡ " if config["display"]["use_emoji"] else ""
-    color = ansi_color(color_code)
+    fresh_color = ansi_color(colors["tokens_fresh"])
+    cached_color = ansi_color(colors["tokens_cached"])
     reset = ansi_reset()
 
-    pct = int(cache_ratio * 100)
-    return f"{icon}{color}{pct}%{reset}"
+    fresh_str = format_tokens_short(fresh)
+    cached_str = format_tokens_short(cached)
+
+    return f"{icon}{fresh_color}{fresh_str}→{reset} {cached_color}{cached_str}↺{reset}"
 
 
 def build_session_segment(data: Dict, config: Dict) -> str:
-    """Build the session block timer segment."""
-    percentage, elapsed_seconds = extract_session_block_info(data, config)
+    """
+    Build the session segment showing duration + total tokens consumed.
+    Format: ⏱️ 44h05m 1.2M tokens
+    """
+    elapsed_seconds, total_input, total_output = extract_session_info(data)
     colors = config["colors"]
-    thresholds = config["session"]
-
-    color_code = get_threshold_color(
-        percentage, thresholds["green_threshold"], thresholds["yellow_threshold"], colors
-    )
 
     icon = "⏱️ " if config["display"]["use_emoji"] else ""
     duration_str = format_duration(elapsed_seconds)
 
-    bar = format_progress_bar(percentage, config, color_code)
+    total_tokens = total_input + total_output
+    tokens_str = format_tokens_short(total_tokens)
 
-    return f"{icon}{duration_str} {bar}"
+    color = ansi_color(colors["cyan"])
+    reset = ansi_reset()
+
+    return f"{icon}{color}{duration_str} {tokens_str}tok{reset}"
+
+
+def build_compaction_segment(data: Dict, config: Dict) -> str:
+    """
+    Build the compaction indicator segment.
+    Shows token delta when compaction is detected.
+    Format: 📉 150k→46k
+    """
+    compacted, from_tokens, to_tokens = extract_compaction_info(data, config)
+
+    if not compacted:
+        return ""
+
+    colors = config["colors"]
+    icon = "📉 " if config["display"]["use_emoji"] else "↓"
+    color = ansi_color(colors["compaction"])
+    reset = ansi_reset()
+
+    from_str = format_tokens_short(from_tokens)
+    to_str = format_tokens_short(to_tokens)
+
+    return f"{icon}{color}{from_str}→{to_str}{reset}"
 
 
 def build_tools_segment(data: Dict, config: Dict) -> str:
@@ -714,7 +797,6 @@ def build_tools_segment(data: Dict, config: Dict) -> str:
     color = ansi_color(colors["tools"])
     reset = ansi_reset()
 
-    # Format: "🔧 Read:2.1k Edit:1.5k"
     tool_strs = [f"{name}:{format_tokens_short(tokens)}" for name, tokens in tools]
     tools_display = " ".join(tool_strs)
 
@@ -793,11 +875,16 @@ def build_status_line(data: Dict, config: Dict) -> str:
         segments.append(build_cost_segment(data, config))
 
     if not compact:
-        if segments_config["cache"]:
-            segments.append(build_cache_segment(data, config))
+        if segments_config.get("tokens", True):
+            segments.append(build_tokens_segment(data, config))
 
         if segments_config["session"]:
             segments.append(build_session_segment(data, config))
+
+        if segments_config.get("compaction", True):
+            compaction_segment = build_compaction_segment(data, config)
+            if compaction_segment:
+                segments.append(compaction_segment)
 
         if segments_config["tools"]:
             tools_segment = build_tools_segment(data, config)

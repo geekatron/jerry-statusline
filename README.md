@@ -5,21 +5,22 @@
 ## Overview
 
 ```
-🟣 Sonnet | 📊 [▓▓▓▓░░░░░░] 42% | 💰 $1.23 | ⚡ 78% | ⏱️ 2h12m [▓▓▓▓░░░░░░] 44% | 🔧 Read:2.1k Edit:1.5k | 🌿 main ✓ | ~/project
+🟣 Sonnet | 📊 [▓▓▓▓░░░░░░] 42% | 💰 CAD 1.23 | ⚡ 8.5k→ 45.2k↺ | ⏱️ 44h05m 1.6Mtok | 📉 180k→46k | 🔧 Read:2.1k Edit:1.5k | 🌿 main ✓ | ~/project
 ```
 
 ### Segments
 
-| Segment | Description | Color Logic |
-|---------|-------------|-------------|
-| **Model** | Active Claude model | Blue=Opus, Purple=Sonnet, Green=Haiku |
-| **Context** | Context window usage | Green <65%, Yellow 65-85%, Red >85% |
-| **Cost** | Session cost (USD) | Green <$1, Yellow $1-5, Red >$5 |
-| **Cache** | Cache efficiency | Green >60%, Yellow 30-60%, Red <30% |
-| **Session** | 5-hour block progress | Green <50%, Yellow 50-80%, Red >80% |
-| **Tools** | Dominant tools by tokens | Purple (optional, requires config) |
-| **Git** | Branch + status | Green=clean, Yellow=dirty |
-| **Directory** | Working directory | Gray |
+| Segment | Description | Example | Color Logic |
+|---------|-------------|---------|-------------|
+| **Model** | Active Claude model | 🟣 Sonnet | Blue=Opus, Purple=Sonnet, Green=Haiku |
+| **Context** | Context window usage | 📊 [▓▓▓▓░░░░░░] 42% | Green <65%, Yellow 65-85%, Red >85% |
+| **Cost** | Session cost (configurable currency) | 💰 CAD 1.23 | Green <$1, Yellow $1-5, Red >$5 |
+| **Tokens** | Fresh → Cached token breakdown | ⚡ 8.5k→ 45.2k↺ | Orange=fresh, Cyan=cached |
+| **Session** | Duration + total tokens consumed | ⏱️ 44h05m 1.6Mtok | Cyan (informational) |
+| **Compaction** | Token delta after auto-compact | 📉 180k→46k | Pink (shows when detected) |
+| **Tools** | Dominant tools by tokens | 🔧 Read:2.1k Edit:1.5k | Purple (optional, requires config) |
+| **Git** | Branch + status | 🌿 main ✓ | Green=clean, Yellow=dirty |
+| **Directory** | Working directory | ~/project | Gray |
 
 ## Requirements
 
@@ -66,6 +67,7 @@ ECW Status Line works out-of-the-box with sensible defaults. To customize, creat
     "critical_threshold": 0.85
   },
   "cost": {
+    "currency_symbol": "CAD ",
     "green_max": 1.00,
     "yellow_max": 5.00
   },
@@ -101,8 +103,9 @@ Only specify values you want to override. All other settings use defaults.
     "model": true,
     "context": true,
     "cost": true,
-    "cache": true,
+    "tokens": true,
     "session": true,
+    "compaction": true,
     "tools": true,
     "git": true,
     "directory": true
@@ -112,17 +115,17 @@ Only specify values you want to override. All other settings use defaults.
     "critical_threshold": 0.85
   },
   "cost": {
+    "currency_symbol": "$",
     "green_max": 1.00,
     "yellow_max": 5.00
   },
-  "cache": {
-    "good_threshold": 0.60,
-    "warning_threshold": 0.30
+  "tokens": {
+    "fresh_warning": 5000,
+    "fresh_critical": 20000
   },
-  "session": {
-    "block_duration_seconds": 18000,
-    "green_threshold": 0.50,
-    "yellow_threshold": 0.80
+  "compaction": {
+    "detection_threshold": 10000,
+    "state_file": "~/.claude/ecw-statusline-state.json"
   },
   "tools": {
     "enabled": false,
@@ -145,6 +148,7 @@ Only specify values you want to override. All other settings use defaults.
     "green": 82,
     "yellow": 220,
     "red": 196,
+    "cyan": 87,
     "opus": 75,
     "sonnet": 141,
     "haiku": 84,
@@ -152,7 +156,10 @@ Only specify values you want to override. All other settings use defaults.
     "directory": 250,
     "git_clean": 82,
     "git_dirty": 220,
-    "tools": 147
+    "tools": 147,
+    "tokens_fresh": 214,
+    "tokens_cached": 81,
+    "compaction": 213
   },
   "advanced": {
     "handle_cumulative_bug": true,
@@ -161,6 +168,53 @@ Only specify values you want to override. All other settings use defaults.
   }
 }
 ```
+
+## Key Features (v2.1.0)
+
+### Configurable Currency
+
+For international users, the currency symbol is now configurable:
+
+```json
+{
+  "cost": {
+    "currency_symbol": "CAD "
+  }
+}
+```
+
+Common values: `"$"`, `"CAD "`, `"€"`, `"£"`, `"¥"`
+
+### Token Breakdown (Fresh vs Cached)
+
+Instead of a percentage-based cache efficiency metric, the new Tokens segment shows the actual fresh and cached token counts:
+
+```
+⚡ 8.5k→ 45.2k↺
+```
+
+- **→ (fresh)**: Tokens loaded from the API (billed)
+- **↺ (cached)**: Tokens loaded from cache (free)
+
+### Session Duration + Total Tokens
+
+Instead of tracking a fixed 5-hour block, the Session segment now shows:
+- Elapsed session duration (e.g., `44h05m`)
+- Total tokens consumed (e.g., `1.6Mtok`)
+
+```
+⏱️ 44h05m 1.6Mtok
+```
+
+### Compaction Detection
+
+Automatically detects when Claude Code auto-compacts your context and shows the token delta:
+
+```
+📉 180k→46k
+```
+
+This helps you understand how much context was retained after compaction.
 
 ## Tools Segment
 
@@ -261,9 +315,18 @@ echo '{"model":{"display_name":"Test"}}' | python3 ~/.claude/statusline.py
 python3 test_statusline.py
 ```
 
-Expected: `RESULTS: 8 passed, 0 failed`
+Expected: `RESULTS: 12 passed, 0 failed`
 
 ## Version History
+
+- **2.1.0** - User experience improvements
+  - Configurable currency symbol (supports CAD, EUR, etc.)
+  - New Tokens segment showing fresh→ cached↺ breakdown
+  - New Session segment showing duration + total tokens
+  - Compaction detection with token delta display
+  - Removed 5-hour session block (not useful for long sessions)
+  - Removed cache efficiency percentage (always 99%)
+  - 12 comprehensive tests
 
 - **2.0.0** - Single-file refactor
   - Self-contained Python script (no external files required)
