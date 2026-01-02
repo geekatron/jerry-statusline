@@ -23,7 +23,46 @@ ECW (Evolved Claude Workflow) Status Line is a single-file, self-contained Pytho
 | 3. Implementation | ✅ COMPLETE | 100% | statusline.py v2.1.0 deployed |
 | 4. Testing | ✅ COMPLETE | 100% | 12 tests passing |
 | 5. Documentation | ✅ COMPLETE | 100% | README.md, GETTING_STARTED.md updated |
-| 6. SOP Compliance | ✅ COMPLETE | 100% | All keystone documents maintained |
+| 6. SOP Compliance | ⚠️ PARTIAL | 85% | Keystone docs maintained; BDD/Test pyramid gaps |
+
+---
+
+## SOP Compliance Status
+
+### Keystone Documents ✅
+| Document | Status | Evidence |
+|----------|--------|----------|
+| MASTER-STATUS.md | ✅ Updated | This document |
+| SESSION-HANDOFF.md | ✅ Updated | Session 002 context |
+| SESSION-001-HANDOFF.md | ✅ Persisted | Session 001 snapshot |
+| SESSION-002-HANDOFF.md | ✅ Created | Session 002 snapshot |
+
+### SOP Violations (Documented)
+
+#### Violation 1: BDD Not Followed ⚠️
+| Aspect | Expected | Actual |
+|--------|----------|--------|
+| Process | Tests before implementation | Implementation before tests |
+| Impact | Medium | Functional tests still validate behavior |
+| Evidence | test_statusline.py written after statusline.py |
+| Remediation | Future sessions must follow Red/Green/Refactor |
+
+#### Violation 2: Test Pyramid Incomplete ⚠️
+| Level | Required | Status |
+|-------|----------|--------|
+| Unit Tests | ✅ Required | ❌ Missing |
+| Integration Tests | ✅ Required | ❌ Missing |
+| Functional Tests | ✅ Required | ✅ 12 passing |
+| System Tests | ✅ Required | ❌ Missing |
+| Contract Tests | ✅ Required | ❌ Missing |
+| Architecture Tests | ✅ Required | ❌ Missing |
+| E2E Tests | ✅ Required | ❌ Missing |
+
+**Remediation Plan:**
+1. Add unit tests for individual functions (extract_*, format_*, build_*)
+2. Add integration tests for segment combinations
+3. Add architecture tests for config structure validation
+4. Add E2E tests with real Claude Code payloads
 
 ---
 
