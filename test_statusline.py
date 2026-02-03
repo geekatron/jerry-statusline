@@ -244,6 +244,8 @@ def run_test(name: str, payload: dict, config_override: dict = None) -> bool:
     print(f"{'=' * 60}")
 
     env = os.environ.copy()
+    # Force UTF-8 mode on Windows to handle ANSI escape sequences
+    env["PYTHONUTF8"] = "1"
 
     # Create temporary config if override provided
     config_file = None
