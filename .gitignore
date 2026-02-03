@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets and credentials - NEVER commit these
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+secrets.json
+*_secret*
+*_token*
+*.credentials
+
+# SSH keys
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+*.pub
+
+# API keys and tokens
+.anthropic
+.openai
+.aws/
+.gcloud/
+
+# State files that may contain sensitive paths
+ecw-statusline-state.json
+
+# Test artifacts
+*.log
+*.tmp
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Local config overrides
+ecw-statusline-config.json

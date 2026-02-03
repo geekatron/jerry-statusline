@@ -61,3 +61,38 @@ jobs:
       - name: Run ruff format check
         run: uv run --with ruff ruff format --check statusline.py test_statusline.py
         continue-on-error: true
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for secret scanning
+
+      - name: Gitleaks - Secret Scanning
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+
+      - name: Bandit - Python Security Linter
+        run: uv run --with bandit bandit -r statusline.py -f json -o bandit-report.json || true
+
+      - name: Bandit - Display Results
+        run: uv run --with bandit bandit -r statusline.py -ll
+
+      - name: Trivy - Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'

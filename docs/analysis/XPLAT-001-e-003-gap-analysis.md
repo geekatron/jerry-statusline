@@ -505,9 +505,9 @@ Provides best balance of coverage and effort for a utility tool of this scope.
 
 ### Files Analyzed
 
-1. `/Users/adam.nowak/workspace/GitHub/geekatron/jerry-statusline/statusline.py` (946 lines)
-2. `/Users/adam.nowak/workspace/GitHub/geekatron/jerry-statusline/test_statusline.py` (623 lines)
-3. `/Users/adam.nowak/workspace/GitHub/geekatron/jerry-statusline/GETTING_STARTED.md` (743 lines)
+1. `statusline.py` (946 lines)
+2. `test_statusline.py` (623 lines)
+3. `GETTING_STARTED.md` (743 lines)
 
 ### Code Patterns Identified
 
