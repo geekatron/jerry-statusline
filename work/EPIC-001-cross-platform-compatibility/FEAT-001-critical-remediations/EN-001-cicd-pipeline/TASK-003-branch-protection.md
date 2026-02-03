@@ -1,7 +1,7 @@
 # TASK-003: Enable Branch Protection Rules
 
 > **Type:** task
-> **Status:** in_progress
+> **Status:** completed
 > **Priority:** high
 > **Created:** 2026-02-03T00:00:00Z
 > **Parent:** EN-001
@@ -60,13 +60,13 @@ The jerry-core repository has the following ruleset that should be replicated:
 
 ## Acceptance Criteria
 
-- [ ] Branch protection ruleset created matching jerry-core
-- [ ] Ruleset named "Don't fuck with main" (or similar)
-- [ ] Deletion protection enabled
-- [ ] Force push protection enabled
-- [ ] PR required with 1 approving review
-- [ ] Wiki enabled on repository
-- [ ] Direct pushes to main blocked
+- [x] Branch protection ruleset created matching jerry-core
+- [x] Ruleset named "Don't fuck with main" (or similar)
+- [x] Deletion protection enabled
+- [x] Force push protection enabled
+- [x] PR required with 1 approving review
+- [x] Wiki enabled on repository
+- [x] Direct pushes to main blocked
 
 ---
 
@@ -146,10 +146,18 @@ gh repo edit geekatron/jerry-statusline --enable-wiki
 
 ### Verification
 
-- [ ] Ruleset visible in Settings → Rules → Rulesets
-- [ ] Direct push to main fails with protection error
-- [ ] PR requires 1 approval before merge
-- [ ] Wiki tab visible on repository
+- [x] Ruleset visible in Settings → Rules → Rulesets
+- [x] Direct push to main fails with protection error
+- [x] PR requires 1 approval before merge
+- [x] Wiki tab visible on repository
+
+### Completed Configuration
+
+| Item | Value |
+|------|-------|
+| Ruleset ID | 12426458 |
+| Ruleset URL | https://github.com/geekatron/jerry-statusline/rules/12426458 |
+| Wiki | Enabled |
 
 ### API Verification Command
 
@@ -169,5 +177,6 @@ gh repo view geekatron/jerry-statusline --json hasWikiEnabled
 |------|--------|-------|
 | 2026-02-03 | pending | Task created |
 | 2026-02-03 | in_progress | Documented jerry-core configuration to match |
+| 2026-02-03 | completed | Ruleset created via API, wiki enabled |
 
 ---
