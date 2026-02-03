@@ -210,6 +210,22 @@ def debug_log(message: str) -> None:
         print(f"[ECW-DEBUG] {message}", file=sys.stderr)
 
 
+def configure_windows_console() -> None:
+    """Configure Windows console for UTF-8 output.
+
+    On Windows, the default console encoding may not support ANSI escape
+    sequences or Unicode characters. This function reconfigures stdout
+    to use UTF-8 encoding with error replacement for unsupported characters.
+    """
+    if sys.platform == "win32":
+        try:
+            # Reconfigure stdout for UTF-8 with error handling
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            # Python < 3.7 or reconfigure not available
+            pass
+
+
 # =============================================================================
 # STATE MANAGEMENT (for compaction detection)
 # =============================================================================
@@ -913,6 +929,7 @@ def build_status_line(data: Dict, config: Dict) -> str:
 
 def main() -> None:
     """Main entry point."""
+    configure_windows_console()
     try:
         config = load_config()
 

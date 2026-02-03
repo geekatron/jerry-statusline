@@ -52,8 +52,8 @@ jobs:
           enable-cache: true
 
       - name: Run ruff check
-        run: uv run ruff check statusline.py test_statusline.py
+        run: uv run --with ruff ruff check statusline.py test_statusline.py
 
       - name: Run ruff format check
-        run: uv run ruff format --check statusline.py test_statusline.py
+        run: uv run --with ruff ruff format --check statusline.py test_statusline.py
         continue-on-error: true
