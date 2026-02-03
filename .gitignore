@@ -50,6 +50,9 @@ id_dsa*
 .aws/
 .gcloud/
 
+# Claude Code local settings (may contain permission tokens)
+.claude/settings.local.json
+
 # State files that may contain sensitive paths
 ecw-statusline-state.json
 
@@ -62,3 +65,22 @@ htmlcov/
 
 # Local config overrides
 ecw-statusline-config.json
+
+# Additional security patterns
+*.sqlite3
+*.db
+*.bak
+*.backup
+*.old
+.npmrc
+.yarnrc
+.pypirc
+.netrc
+.docker/
+.kube/
+kubeconfig*
+
+# Pre-commit (keep .secrets.baseline tracked for team consistency)
+
+# Bandit reports
+bandit-report.json

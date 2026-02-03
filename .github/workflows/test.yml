@@ -88,13 +88,22 @@ jobs:
           python-version: '3.12'
 
       - name: Bandit - Python Security Linter
-        run: uv run --with bandit bandit -r statusline.py -f json -o bandit-report.json || true
-
-      - name: Bandit - Display Results
-        run: uv run --with bandit bandit -r statusline.py -ll
+        run: |
+          uv run --with bandit bandit -r statusline.py -ll -ii
+          # Fail on medium+ severity issues
+          uv run --with bandit bandit -r statusline.py -ll --exit-zero-if-skipped -f json | python -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          high_med = [r for r in data.get('results', []) if r.get('issue_severity') in ('HIGH', 'MEDIUM')]
+          if high_med:
+              for r in high_med:
+                  print(f\"SECURITY: {r['issue_severity']} - {r['issue_text']} at {r['filename']}:{r['line_number']}\")
+              sys.exit(1)
+          print('No HIGH/MEDIUM security issues found')
+          "
 
       - name: Trivy - Vulnerability Scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
