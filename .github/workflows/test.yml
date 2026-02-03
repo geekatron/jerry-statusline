@@ -32,11 +32,15 @@ jobs:
 
       - name: Run tests
         run: uv run python test_statusline.py
+        env:
+          PYTHONUTF8: "1"
 
       - name: Run statusline with sample input (smoke test)
         shell: bash
         run: |
           echo '{"model":{"id":"claude-sonnet-4","display_name":"Sonnet"},"cost":{"total_cost_usd":0.50},"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":5000,"cache_read_input_tokens":10000}}}' | uv run python statusline.py
+        env:
+          PYTHONUTF8: "1"
 
   lint:
     name: Lint
