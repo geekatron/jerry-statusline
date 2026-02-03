@@ -548,7 +548,7 @@ def main() -> int:
     """Run all tests."""
     print("ECW Status Line - Test Suite v2.1.0")
     print(f"Script: {STATUSLINE_SCRIPT}")
-    print(f"Single-file deployment test")
+    print("Single-file deployment test")
 
     if not STATUSLINE_SCRIPT.exists():
         print(f"ERROR: Script not found at {STATUSLINE_SCRIPT}")
