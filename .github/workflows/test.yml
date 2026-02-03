@@ -90,7 +90,7 @@ jobs:
       - name: Bandit - Python Security Linter
         run: |
           # Run bandit with medium+ severity filter - exits non-zero if issues found
-          uv run --with bandit bandit -r statusline.py -ll -ii --severity-level medium
+          uv run --with bandit bandit -r statusline.py -ll -ii
 
       - name: Trivy - Vulnerability Scanner
         uses: aquasecurity/trivy-action@0.28.0
