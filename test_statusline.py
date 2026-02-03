@@ -260,10 +260,12 @@ def run_test(name: str, payload: dict, config_override: dict = None) -> bool:
 
     try:
         result = subprocess.run(
-            ["python3", str(STATUSLINE_SCRIPT)],
+            [sys.executable, str(STATUSLINE_SCRIPT)],
             input=json.dumps(payload),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
             env=env,
         )
@@ -317,7 +319,7 @@ def run_tools_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            ["python3", str(STATUSLINE_SCRIPT)],
+            [sys.executable, str(STATUSLINE_SCRIPT)],
             input=json.dumps(payload),
             capture_output=True,
             text=True,
@@ -359,7 +361,7 @@ def run_compact_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            ["python3", str(STATUSLINE_SCRIPT)],
+            [sys.executable, str(STATUSLINE_SCRIPT)],
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -401,7 +403,7 @@ def run_currency_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            ["python3", str(STATUSLINE_SCRIPT)],
+            [sys.executable, str(STATUSLINE_SCRIPT)],
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -432,7 +434,7 @@ def run_tokens_segment_test() -> bool:
 
     try:
         result = subprocess.run(
-            ["python3", str(STATUSLINE_SCRIPT)],
+            [sys.executable, str(STATUSLINE_SCRIPT)],
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -465,7 +467,7 @@ def run_session_segment_test() -> bool:
 
     try:
         result = subprocess.run(
-            ["python3", str(STATUSLINE_SCRIPT)],
+            [sys.executable, str(STATUSLINE_SCRIPT)],
             input=json.dumps(PAYLOAD_LONG_SESSION),
             capture_output=True,
             text=True,
@@ -518,7 +520,7 @@ def run_compaction_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            ["python3", str(STATUSLINE_SCRIPT)],
+            [sys.executable, str(STATUSLINE_SCRIPT)],
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
