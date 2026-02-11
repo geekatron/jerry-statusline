@@ -3,20 +3,41 @@
 A step-by-step guide to installing and configuring ECW Status Line for Claude Code.
 
 **Primary Platform:** macOS with zsh
-**Also Supported:** Windows 10/11 with PowerShell
+**Also Supported:** Windows 10/11 with PowerShell, Linux (Ubuntu/Debian, Fedora/RHEL)
 
 ---
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Installation](#installation)
-3. [Verification](#verification)
-4. [Configuration](#configuration)
-5. [Enabling the Tools Segment](#enabling-the-tools-segment)
-6. [Customization Examples](#customization-examples)
-7. [Troubleshooting](#troubleshooting)
-8. [Uninstallation](#uninstallation)
+1. [Supported Platforms](#supported-platforms)
+2. [Prerequisites](#prerequisites)
+3. [Installation](#installation)
+4. [Verification](#verification)
+5. [Configuration](#configuration)
+6. [Enabling the Tools Segment](#enabling-the-tools-segment)
+7. [Customization Examples](#customization-examples)
+8. [Docker and Containers](#docker-and-containers)
+9. [Troubleshooting](#troubleshooting)
+10. [Uninstallation](#uninstallation)
+
+---
+
+## Supported Platforms
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| macOS 12+ (Intel & Apple Silicon) | **Fully Supported** | Primary development platform |
+| Windows 10/11 (PowerShell) | **Fully Supported** | Windows Terminal recommended |
+| Ubuntu 22.04+ / Debian 12+ | **Fully Supported** | CI-tested |
+| Fedora 38+ / RHEL 9+ | **Supported** | Same as Ubuntu instructions |
+| WSL 2 (Windows Subsystem for Linux) | **Supported** | Follow Linux instructions |
+| Docker containers (glibc-based) | **Supported** | Gracefully handles missing HOME, read-only FS |
+| Alpine Linux / musl-based | **Not Tested** | May work (stdlib only) but not validated. Prefer glibc-based images |
+| FreeBSD | **Not Tested** | May work but not validated |
+| ARM Linux (Raspberry Pi) | **Not Tested** | Python stdlib-only, should work but not validated |
+
+> **Note:** Alpine Linux uses musl libc and has not been tested. The script is stdlib-only so it may work,
+> but for guaranteed compatibility use `python:3.11-slim` (Debian-based) instead of `python:3.11-alpine`.
 
 ---
 
@@ -141,6 +162,59 @@ git --version
 ```
 
 If not installed, download from [git-scm.com](https://git-scm.com/download/win).
+
+---
+
+### Linux (Ubuntu/Debian)
+
+#### 1. Python 3.9 or later
+
+```bash
+python3 --version
+```
+
+If Python is not installed or version is below 3.9:
+
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install -y python3 python3-pip
+
+# Fedora/RHEL
+sudo dnf install -y python3
+
+# Verify
+python3 --version
+```
+
+#### 2. Claude Code CLI
+
+```bash
+claude --version
+```
+
+If not installed, follow [Claude Code installation instructions](https://docs.anthropic.com/claude-code/getting-started).
+
+#### 3. Git (Optional)
+
+```bash
+# Ubuntu/Debian
+sudo apt install -y git
+
+# Fedora/RHEL
+sudo dnf install -y git
+```
+
+#### 4. Terminal with emoji support
+
+Most modern Linux terminal emulators (GNOME Terminal, Konsole, Alacritty, kitty) support emoji. If your terminal does not, disable emoji:
+
+```json
+{
+  "display": {
+    "use_emoji": false
+  }
+}
+```
 
 ---
 
@@ -298,6 +372,60 @@ Add the `statusLine` section.
 #### Step 5: Restart Claude Code
 
 Exit and restart Claude Code to load the new status line.
+
+---
+
+### Linux
+
+#### Step 1: Create the Claude configuration directory
+
+```bash
+mkdir -p ~/.claude
+```
+
+#### Step 2: Download the status line script
+
+```bash
+curl -o ~/.claude/statusline.py https://raw.githubusercontent.com/geekatron/ecw-statusline/main/statusline.py
+```
+
+#### Step 3: Make the script executable
+
+```bash
+chmod +x ~/.claude/statusline.py
+```
+
+#### Step 4: Verify the script runs
+
+```bash
+echo '{"model":{"display_name":"Test"}}' | python3 ~/.claude/statusline.py
+```
+
+You should see colored output with segment data.
+
+#### Step 5: Configure Claude Code
+
+```bash
+# Create settings.json if it doesn't exist
+cat > ~/.claude/settings.json << 'EOF'
+{
+  "statusLine": {
+    "type": "command",
+    "command": "python3 ~/.claude/statusline.py",
+    "padding": 0
+  }
+}
+EOF
+```
+
+If `~/.claude/settings.json` already exists, add the `statusLine` section to the existing JSON.
+
+#### Step 6: Restart Claude Code
+
+```bash
+/exit
+claude
+```
 
 ---
 
@@ -518,6 +646,48 @@ Sonnet | [▓▓▓▓░░░░░░] 42% | $1.23 | 78% | 2h12m | main ✓ |
 
 ---
 
+## Docker and Containers
+
+ECW Status Line is hardened for container environments where `HOME` may not be set, the filesystem may be read-only, or no TTY is available.
+
+### Supported base images
+
+| Image | Status | Notes |
+|-------|--------|-------|
+| `python:3.11-slim` | Recommended | Debian-based, small footprint |
+| `python:3.11` | Supported | Full Debian image |
+| `ubuntu:22.04` | Supported | Install python3 separately |
+| `python:3.11-alpine` | **Not Tested** | musl libc; may work but not validated |
+
+### Container behavior
+
+When running in a container:
+
+- **Missing HOME**: The script skips `~/.claude/` config paths and state file writes. No crash.
+- **Read-only filesystem**: State file writes fail gracefully with a debug log message. Output is still produced.
+- **No TTY**: Output works via pipe (stdin/stdout) without a terminal attached.
+
+### Example Dockerfile
+
+```dockerfile
+FROM python:3.11-slim
+COPY statusline.py /opt/statusline.py
+# No additional dependencies needed (stdlib only)
+CMD ["python3", "/opt/statusline.py"]
+```
+
+### Testing container behavior locally
+
+```bash
+# Test without HOME set
+unset HOME && echo '{"model":{"display_name":"Test"}}' | python3 statusline.py
+
+# Test with read-only state path (uses debug mode)
+ECW_DEBUG=1 echo '{"model":{"display_name":"Test"}}' | python3 statusline.py
+```
+
+---
+
 ## Troubleshooting
 
 ### Status line not appearing
@@ -685,6 +855,22 @@ open -e ~/.claude/settings.json
 # Restart Claude Code
 ```
 
+### Linux
+
+```bash
+# Remove the script
+rm ~/.claude/statusline.py
+
+# Remove configuration (optional)
+rm ~/.claude/ecw-statusline-config.json
+
+# Edit settings.json to remove statusLine section
+nano ~/.claude/settings.json
+# Remove the "statusLine": { ... } section
+
+# Restart Claude Code
+```
+
 ### Windows
 
 ```powershell
@@ -719,6 +905,7 @@ notepad "$env:USERPROFILE\.claude\settings.json"
 | Platform | Script | Config | Settings |
 |----------|--------|--------|----------|
 | macOS | `~/.claude/statusline.py` | `~/.claude/ecw-statusline-config.json` | `~/.claude/settings.json` |
+| Linux | `~/.claude/statusline.py` | `~/.claude/ecw-statusline-config.json` | `~/.claude/settings.json` |
 | Windows | `%USERPROFILE%\.claude\statusline.py` | `%USERPROFILE%\.claude\ecw-statusline-config.json` | `%USERPROFILE%\.claude\settings.json` |
 
 ### Status Line Segments

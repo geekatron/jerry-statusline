@@ -158,10 +158,18 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # CONFIGURATION LOADING
 # =============================================================================
 
-CONFIG_PATHS = [
-    Path(__file__).parent / "ecw-statusline-config.json",
-    Path.home() / ".claude" / "ecw-statusline-config.json",
-]
+def _get_config_paths() -> List[Path]:
+    """Get config file search paths, handling missing HOME gracefully."""
+    paths = [Path(__file__).parent / "ecw-statusline-config.json"]
+    try:
+        paths.append(Path.home() / ".claude" / "ecw-statusline-config.json")
+    except (RuntimeError, KeyError, OSError):
+        # HOME not set or not resolvable (e.g., minimal Docker container)
+        debug_log("HOME not available, skipping ~/.claude config path")
+    return paths
+
+
+CONFIG_PATHS = _get_config_paths()
 
 _transcript_cache: Dict[str, Tuple[float, Dict[str, int]]] = {}
 
@@ -231,30 +239,55 @@ def configure_windows_console() -> None:
 # =============================================================================
 
 
+def _resolve_state_path(config: Dict) -> Optional[Path]:
+    """Resolve state file path, returning None if HOME is unavailable."""
+    raw_path = config["compaction"]["state_file"]
+    if not isinstance(raw_path, str):
+        debug_log(f"Invalid state_file config type: {type(raw_path).__name__}")
+        return None
+    try:
+        return Path(os.path.expanduser(raw_path))
+    except (RuntimeError, KeyError, OSError, TypeError):
+        debug_log("Cannot resolve state file path: HOME not set or invalid config")
+        return None
+
+
 def load_state(config: Dict) -> Dict[str, Any]:
     """Load previous state for compaction detection."""
-    state_file = Path(os.path.expanduser(config["compaction"]["state_file"]))
+    default = {"previous_context_tokens": 0, "last_compaction_from": 0, "last_compaction_to": 0}
+    state_file = _resolve_state_path(config)
 
-    if state_file.exists():
-        try:
+    if state_file is None:
+        return default
+
+    try:
+        if state_file.exists():
             with open(state_file, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            debug_log(f"State load error: {e}")
+    except (json.JSONDecodeError, OSError) as e:
+        debug_log(f"State load error: {e}")
 
-    return {"previous_context_tokens": 0, "last_compaction_from": 0, "last_compaction_to": 0}
+    return default
 
 
 def save_state(config: Dict, state: Dict[str, Any]) -> None:
-    """Save current state for next invocation."""
-    state_file = Path(os.path.expanduser(config["compaction"]["state_file"]))
+    """Save current state for next invocation.
+
+    Handles read-only filesystems and missing HOME gracefully by logging
+    a debug warning rather than crashing.
+    """
+    state_file = _resolve_state_path(config)
+
+    if state_file is None:
+        debug_log("Skipping state save: cannot resolve path (HOME not set)")
+        return
 
     try:
         state_file.parent.mkdir(parents=True, exist_ok=True)
         with open(state_file, "w", encoding="utf-8") as f:
             json.dump(state, f)
-    except IOError as e:
-        debug_log(f"State save error: {e}")
+    except OSError as e:
+        debug_log(f"State save failed: {e}")
 
 
 # =============================================================================
@@ -279,7 +312,7 @@ def get_terminal_width() -> int:
     try:
         return os.get_terminal_size().columns
     except OSError:
-        return 120
+        return 80
 
 
 # =============================================================================
@@ -327,7 +360,7 @@ def parse_transcript_for_tools(transcript_path: str, config: Dict) -> Dict[str, 
     tool_tokens: Dict[str, int] = {}
 
     try:
-        with open(transcript_path, "r", encoding="utf-8") as f:
+        with open(transcript_path, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -523,8 +556,11 @@ def extract_workspace_info(data: Dict, config: Dict) -> str:
     dir_config = config["directory"]
 
     if dir_config["abbreviate_home"]:
-        home = os.path.expanduser("~")
-        if current_dir.startswith(home):
+        try:
+            home = str(Path.home())
+        except (RuntimeError, KeyError, OSError):
+            home = ""
+        if home and current_dir.startswith(home):
             current_dir = "~" + current_dir[len(home):]
 
     if dir_config["basename_only"]:

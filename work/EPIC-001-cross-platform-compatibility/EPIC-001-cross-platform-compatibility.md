@@ -57,13 +57,13 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 
 | ID | Title | Status | Priority | Effort | Progress |
 |----|-------|--------|----------|--------|----------|
-| [FEAT-001](FEAT-001-critical-remediations/FEAT-001-critical-remediations.md) | Critical Remediations (Phase 1) | in_progress | critical | 26h | 57% |
+| [FEAT-001](FEAT-001-critical-remediations/FEAT-001-critical-remediations.md) | Critical Remediations (Phase 1) | completed | critical | 26h | 100% |
 | [FEAT-002](FEAT-002-high-priority-improvements/FEAT-002-high-priority-improvements.md) | High-Priority Improvements (Phase 2) | pending | high | 18h | 0% |
 | [FEAT-003](FEAT-003-nice-to-have/FEAT-003-nice-to-have.md) | Nice-to-Have Enhancements (Phase 3) | pending | medium | 16h | 0% |
 
 ### Feature Links
 
-- [FEAT-001: Critical Remediations](FEAT-001-critical-remediations/FEAT-001-critical-remediations.md) - BLOCKS DEPLOYMENT
+- [FEAT-001: Critical Remediations](FEAT-001-critical-remediations/FEAT-001-critical-remediations.md) - COMPLETED
 - [FEAT-002: High-Priority Improvements](FEAT-002-high-priority-improvements/FEAT-002-high-priority-improvements.md) - Before GA
 - [FEAT-003: Nice-to-Have Enhancements](FEAT-003-nice-to-have/FEAT-003-nice-to-have.md) - Post-GA
 
@@ -77,11 +77,11 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 +------------------------------------------------------------------+
 |                     EPIC PROGRESS TRACKER                         |
 +------------------------------------------------------------------+
-| Features:  [.......................] 0% (0/3 completed)          |
-| Enablers:  [######................] 29% (2/7 completed)          |
-| Tasks:     [#####.................] 22% (8/36 completed)         |
+| Features:  [#######...............] 33% (1/3 completed)          |
+| Enablers:  [#########.............] 43% (3/7 completed)          |
+| Tasks:     [########..............] 39% (14/36 completed)        |
 +------------------------------------------------------------------+
-| Overall:   [#####.................] 22%                           |
+| Overall:   [########..............] 39%                           |
 +------------------------------------------------------------------+
 ```
 
@@ -90,21 +90,21 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 | Metric | Value |
 |--------|-------|
 | **Total Features** | 3 |
-| **Completed Features** | 0 |
-| **In Progress Features** | 1 (FEAT-001) |
+| **Completed Features** | 1 (FEAT-001) |
+| **In Progress Features** | 0 |
 | **Pending Features** | 2 (FEAT-002, FEAT-003) |
-| **Feature Completion %** | 0% (none fully closed) |
+| **Feature Completion %** | 33% |
 | **Total Enablers** | 7 |
-| **Completed Enablers** | 2 (EN-001, EN-007) |
+| **Completed Enablers** | 3 (EN-001, EN-002, EN-007) |
 | **Total Tasks** | 36 |
-| **Completed Tasks** | 8 |
+| **Completed Tasks** | 14 |
 
 ### Milestone Tracking
 
 | Milestone | Target Date | Status | Notes |
 |-----------|-------------|--------|-------|
 | CI/CD Live | 2026-02-10 | completed | EN-001 delivered 2026-02-03 |
-| Tests Complete | 2026-02-14 | pending | EN-002 not started |
+| Tests Complete | 2026-02-14 | completed | EN-002 completed 2026-02-10 |
 | GA Ready | 2026-02-21 | pending | Phase 2 Complete |
 
 ---
@@ -124,8 +124,8 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 
 | Risk ID | Description | Score | Mitigation |
 |---------|-------------|-------|------------|
-| RSK-001 | Windows native support untested | 15 RED | Execute tests on Windows 10/11 |
-| RSK-003 | Alpine Linux/musl incompatibility | 20 RED | Test or document exclusion |
+| RSK-001 | ~~Windows native support untested~~ | ~~15 RED~~ MITIGATED | EN-002: CI matrix verified on windows-latest |
+| RSK-003 | ~~Alpine Linux/musl incompatibility~~ | ~~20 RED~~ MITIGATED | EN-002: Documented as "Not Tested" in GETTING_STARTED.md |
 | RSK-007 | ~~CI/CD not implemented~~ | ~~15 RED~~ MITIGATED | EN-001 completed - 12 matrix jobs passing |
 | RSK-009 | Emoji rendering inconsistent | 20 RED | Implement ASCII fallback |
 
@@ -138,5 +138,6 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 | 2026-02-03 | Claude | pending | Epic created from XPLAT-001 synthesis |
 | 2026-02-03 | Claude | in_progress | EN-001 CI/CD Pipeline completed, EN-007 Security Audit completed |
 | 2026-02-10 | Claude | in_progress | Worktracker remediation - status/progress updated to reflect reality (22% overall) |
+| 2026-02-10 | Claude | in_progress | EN-002 completed, FEAT-001 completed. Progress: 22% → 39%. Risks RSK-001, RSK-003 mitigated. |
 
 ---

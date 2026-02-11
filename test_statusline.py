@@ -548,6 +548,250 @@ def run_compaction_test() -> bool:
         config_path.unlink(missing_ok=True)
 
 
+def run_no_home_test() -> bool:
+    """Test behavior when HOME is not set (Docker/container scenario)."""
+    print(f"\n{'=' * 60}")
+    print("TEST: No HOME Environment (Container Simulation)")
+    print(f"{'=' * 60}")
+
+    env = os.environ.copy()
+    # Remove HOME-related variables to simulate container
+    env.pop("HOME", None)
+    env.pop("USERPROFILE", None)
+    env.pop("HOMEDRIVE", None)
+    env.pop("HOMEPATH", None)
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Should NOT crash, should produce output
+        has_output = len(result.stdout.strip()) > 0
+        print(f"Produced output without crash: {has_output}")
+
+        return result.returncode == 0 and has_output
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+
+
+def run_no_tty_test() -> bool:
+    """Test behavior when no TTY is available (pipe/container scenario)."""
+    print(f"\n{'=' * 60}")
+    print("TEST: No TTY (Pipe/Container Simulation)")
+    print(f"{'=' * 60}")
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        # Run with stdin as pipe (no TTY) - this is the default for subprocess
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_MINIMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Should produce valid output even without a TTY
+        has_output = len(result.stdout.strip()) > 0
+        no_error = "Error" not in result.stdout
+        print(f"Valid output without TTY: {has_output and no_error}")
+
+        return result.returncode == 0 and has_output and no_error
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+
+
+def run_readonly_state_test() -> bool:
+    """Test behavior when state file location is read-only."""
+    print(f"\n{'=' * 60}")
+    print("TEST: Read-Only Filesystem (State File)")
+    print(f"{'=' * 60}")
+
+    # Create a read-only directory to simulate read-only filesystem
+    readonly_dir = tempfile.mkdtemp()
+    state_file_path = os.path.join(readonly_dir, "subdir", "state.json")
+    os.chmod(readonly_dir, 0o444)
+
+    config = {
+        "compaction": {
+            "state_file": state_file_path,
+            "detection_threshold": 10000,
+        }
+    }
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Should NOT crash even with unwritable state path
+        has_output = len(result.stdout.strip()) > 0
+        no_crash = result.returncode == 0
+        print(f"Graceful degradation on read-only FS: {has_output and no_crash}")
+
+        return no_crash and has_output
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+        # Restore permissions for cleanup
+        os.chmod(readonly_dir, 0o755)
+        os.rmdir(readonly_dir)
+
+
+def run_emoji_disabled_test() -> bool:
+    """Test ASCII-only mode (no emoji) for terminals without Unicode support."""
+    print(f"\n{'=' * 60}")
+    print("TEST: Emoji Disabled (ASCII Fallback)")
+    print(f"{'=' * 60}")
+
+    config = {"display": {"use_emoji": False}}
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Should NOT contain any emoji characters
+        emoji_chars = ["🟣", "🔵", "🟢", "📊", "💰", "⚡", "⏱️", "🔧", "🌿", "📂", "📉"]
+        has_emoji = any(e in result.stdout for e in emoji_chars)
+        print(f"No emoji in output (expected): {not has_emoji}")
+
+        return result.returncode == 0 and not has_emoji
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
+def run_corrupt_state_test() -> bool:
+    """Test behavior when state file contains invalid JSON."""
+    print(f"\n{'=' * 60}")
+    print("TEST: Corrupt State File (Invalid JSON)")
+    print(f"{'=' * 60}")
+
+    # Create a state file with malformed JSON
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False
+    ) as tf:
+        tf.write("{invalid json: missing quotes, }")
+        state_file = tf.name
+
+    config = {
+        "compaction": {
+            "state_file": state_file,
+            "detection_threshold": 10000,
+        }
+    }
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Should NOT crash, should use safe defaults
+        has_output = len(result.stdout.strip()) > 0
+        no_crash = result.returncode == 0
+        print(f"Graceful handling of corrupt state: {has_output and no_crash}")
+
+        return no_crash and has_output
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        Path(state_file).unlink(missing_ok=True)
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
 def main() -> int:
     """Run all tests."""
     print("ECW Status Line - Test Suite v2.1.0")
@@ -611,6 +855,38 @@ def main() -> int:
 
     # Compaction detection test
     if run_compaction_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # EN-002: Platform verification tests
+
+    # No HOME environment (Docker/container)
+    if run_no_home_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # No TTY (pipe/container)
+    if run_no_tty_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Read-only filesystem (state file)
+    if run_readonly_state_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Emoji disabled (ASCII fallback)
+    if run_emoji_disabled_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Corrupt state file (invalid JSON)
+    if run_corrupt_state_test():
         passed += 1
     else:
         failed += 1
