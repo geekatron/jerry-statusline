@@ -1,5 +1,7 @@
 # ECW Status Line
 
+[![Tests](https://github.com/geekatron/jerry-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/geekatron/jerry-statusline/actions/workflows/test.yml)
+
 **Evolved Claude Workflow** - A single-file, self-contained status line for Claude Code providing maximum visibility into session state, resource consumption, and workspace context.
 
 ## Overview
@@ -315,18 +317,22 @@ echo '{"model":{"display_name":"Test"}}' | python3 ~/.claude/statusline.py
 python3 test_statusline.py
 ```
 
-Expected: `RESULTS: 12 passed, 0 failed`
+Expected: `RESULTS: 17 passed, 0 failed`
 
 ## Version History
 
-- **2.1.0** - User experience improvements
+- **2.1.0** - User experience + cross-platform improvements
   - Configurable currency symbol (supports CAD, EUR, etc.)
   - New Tokens segment showing fresh→ cached↺ breakdown
   - New Session segment showing duration + total tokens
   - Compaction detection with token delta display
-  - Removed 5-hour session block (not useful for long sessions)
-  - Removed cache efficiency percentage (always 99%)
-  - 12 comprehensive tests
+  - Cross-platform CI/CD (Ubuntu, macOS, Windows; Python 3.9-3.12)
+  - Container hardening (missing HOME, read-only FS, no TTY)
+  - Complete ASCII fallback when `use_emoji: false` (all Unicode chars replaced)
+  - Subprocess encoding hardened for non-UTF8 locales
+  - Linux, Docker, and WSL installation documentation
+  - Security audit (Bandit, gitleaks, PII scan)
+  - 17 comprehensive tests (including container edge cases)
 
 - **2.0.0** - Single-file refactor
   - Self-contained Python script (no external files required)

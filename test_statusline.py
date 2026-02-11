@@ -9,6 +9,7 @@ Usage: python3 test_statusline.py
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -682,9 +683,9 @@ def run_readonly_state_test() -> bool:
     finally:
         config_path = SCRIPT_DIR / "ecw-statusline-config.json"
         config_path.unlink(missing_ok=True)
-        # Restore permissions for cleanup
+        # Restore permissions for cleanup (use shutil.rmtree for Windows compatibility)
         os.chmod(readonly_dir, 0o755)
-        os.rmdir(readonly_dir)
+        shutil.rmtree(readonly_dir, ignore_errors=True)
 
 
 def run_emoji_disabled_test() -> bool:
@@ -717,12 +718,19 @@ def run_emoji_disabled_test() -> bool:
         print(f"STDOUT: {result.stdout.strip()}")
         print(f"EXIT CODE: {result.returncode}")
 
-        # Should NOT contain any emoji characters
-        emoji_chars = ["🟣", "🔵", "🟢", "📊", "💰", "⚡", "⏱️", "🔧", "🌿", "📂", "📉"]
-        has_emoji = any(e in result.stdout for e in emoji_chars)
-        print(f"No emoji in output (expected): {not has_emoji}")
+        # Should NOT contain ANY non-ASCII characters (codepoint > 127)
+        non_ascii = [ch for ch in result.stdout if ord(ch) > 127]
+        has_non_ascii = len(non_ascii) > 0
+        if has_non_ascii:
+            unique_non_ascii = set(non_ascii)
+            print(f"Non-ASCII chars found: {unique_non_ascii}")
+        print(f"Pure ASCII output (expected): {not has_non_ascii}")
 
-        return result.returncode == 0 and not has_emoji
+        # Should contain ASCII alternatives
+        has_ascii_bar = "#" in result.stdout or "-" in result.stdout
+        print(f"ASCII progress bar chars present: {has_ascii_bar}")
+
+        return result.returncode == 0 and not has_non_ascii
 
     except Exception as e:
         print(f"ERROR: {e}")

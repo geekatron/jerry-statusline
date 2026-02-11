@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -49,6 +50,9 @@ from typing import Any, Dict, List, Optional, Tuple
 # =============================================================================
 
 __version__ = "2.1.0"
+
+# Pattern to strip ANSI escape codes from untrusted input (e.g., git branch names)
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 # =============================================================================
 # DEFAULT CONFIGURATION (embedded - no external file required)
@@ -164,8 +168,8 @@ def _get_config_paths() -> List[Path]:
     try:
         paths.append(Path.home() / ".claude" / "ecw-statusline-config.json")
     except (RuntimeError, KeyError, OSError):
-        # HOME not set or not resolvable (e.g., minimal Docker container)
-        debug_log("HOME not available, skipping ~/.claude config path")
+        # HOME not set or not resolvable (e.g., minimal Docker container, Windows CI)
+        pass
     return paths
 
 
@@ -607,14 +611,16 @@ def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=cwd,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
 
         if result.returncode != 0:
             return None
 
-        branch = result.stdout.strip()
+        # Sanitize ANSI escape codes from git output to prevent terminal injection
+        branch = _ANSI_ESCAPE_RE.sub("", result.stdout.strip())
 
         max_len = git_config["max_branch_length"]
         if len(branch) > max_len:
@@ -624,7 +630,8 @@ def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
             ["git", "status", "--porcelain"],
             cwd=cwd,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
 
@@ -648,8 +655,9 @@ def format_progress_bar(percentage: float, config: Dict, color_code: int) -> str
     """Format a progress bar with color."""
     bar_config = config["display"]["progress_bar"]
     width = bar_config["width"]
-    filled_char = bar_config["filled_char"]
-    empty_char = bar_config["empty_char"]
+    use_emoji = config["display"]["use_emoji"]
+    filled_char = bar_config["filled_char"] if use_emoji else "#"
+    empty_char = bar_config["empty_char"] if use_emoji else "-"
     show_pct = bar_config["show_percentage"]
 
     display_pct = min(max(percentage, 0), 1.0)
@@ -781,7 +789,10 @@ def build_tokens_segment(data: Dict, config: Dict) -> str:
     fresh, cached = extract_token_breakdown(data)
     colors = config["colors"]
 
-    icon = "⚡ " if config["display"]["use_emoji"] else ""
+    use_emoji = config["display"]["use_emoji"]
+    icon = "⚡ " if use_emoji else ""
+    fresh_indicator = "→" if use_emoji else ">"
+    cached_indicator = "↺" if use_emoji else "<"
     fresh_color = ansi_color(colors["tokens_fresh"])
     cached_color = ansi_color(colors["tokens_cached"])
     reset = ansi_reset()
@@ -789,7 +800,7 @@ def build_tokens_segment(data: Dict, config: Dict) -> str:
     fresh_str = format_tokens_short(fresh)
     cached_str = format_tokens_short(cached)
 
-    return f"{icon}{fresh_color}{fresh_str}→{reset} {cached_color}{cached_str}↺{reset}"
+    return f"{icon}{fresh_color}{fresh_str}{fresh_indicator}{reset} {cached_color}{cached_str}{cached_indicator}{reset}"
 
 
 def build_session_segment(data: Dict, config: Dict) -> str:
@@ -824,14 +835,16 @@ def build_compaction_segment(data: Dict, config: Dict) -> str:
         return ""
 
     colors = config["colors"]
-    icon = "📉 " if config["display"]["use_emoji"] else "↓"
+    use_emoji = config["display"]["use_emoji"]
+    icon = "📉 " if use_emoji else "v "
+    arrow = "→" if use_emoji else ">"
     color = ansi_color(colors["compaction"])
     reset = ansi_reset()
 
     from_str = format_tokens_short(from_tokens)
     to_str = format_tokens_short(to_tokens)
 
-    return f"{icon}{color}{from_str}→{to_str}{reset}"
+    return f"{icon}{color}{from_str}{arrow}{to_str}{reset}"
 
 
 def build_tools_segment(data: Dict, config: Dict) -> str:
@@ -866,16 +879,18 @@ def build_git_segment(data: Dict, config: Dict) -> str:
     colors = config["colors"]
     git_config = config["git"]
 
-    icon = "🌿 " if config["display"]["use_emoji"] else ""
+    use_emoji = config["display"]["use_emoji"]
+    icon = "🌿 " if use_emoji else ""
 
     if is_clean:
-        status_icon = "✓" if git_config["show_status"] else ""
+        status_icon = ("✓" if use_emoji else "+") if git_config["show_status"] else ""
         color = ansi_color(colors["git_clean"])
     else:
+        dirty_marker = "●" if use_emoji else "*"
         if git_config["show_uncommitted_count"]:
-            status_icon = f"●{uncommitted_count}"
+            status_icon = f"{dirty_marker}{uncommitted_count}"
         elif git_config["show_status"]:
-            status_icon = "●"
+            status_icon = dirty_marker
         else:
             status_icon = ""
         color = ansi_color(colors["git_dirty"])

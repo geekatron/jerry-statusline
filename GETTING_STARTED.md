@@ -155,6 +155,16 @@ If not installed, follow [Claude Code installation instructions](https://docs.an
 
 For best emoji and color support, use [Windows Terminal](https://aka.ms/terminal) instead of the default Command Prompt.
 
+#### WSL vs Native Windows
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Claude Code runs in PowerShell | Use **native Windows** instructions above |
+| Claude Code runs in WSL 2 | Use **Linux** instructions below |
+| Using VS Code + WSL remote | Use **Linux** instructions (VS Code forwards to WSL) |
+
+> **Tip:** If you use WSL 2, install ECW Status Line inside the WSL filesystem (`~/.claude/`), not on the Windows side. The script and Claude Code should both run in the same environment.
+
 #### 4. Git (Optional)
 
 ```powershell
@@ -646,6 +656,63 @@ Sonnet | [▓▓▓▓░░░░░░] 42% | $1.23 | 78% | 2h12m | main ✓ |
 
 ---
 
+## Claude Code JSON Schema
+
+ECW Status Line reads its input from stdin as a JSON object provided by Claude Code's `statusLine` hook. The schema is **not formally documented** by Anthropic and may change between Claude Code versions.
+
+### Expected Input Fields
+
+```json
+{
+  "hook_event_name": "Status",
+  "session_id": "string",
+  "transcript_path": "/path/to/transcript.jsonl",
+  "cwd": "/current/working/directory",
+  "version": "1.0.80",
+  "model": {
+    "id": "claude-sonnet-4-20250514",
+    "display_name": "Sonnet"
+  },
+  "workspace": {
+    "current_dir": "/path/to/project",
+    "project_dir": "/path/to/project"
+  },
+  "cost": {
+    "total_cost_usd": 0.45,
+    "total_duration_ms": 300000,
+    "total_lines_added": 156,
+    "total_lines_removed": 23
+  },
+  "context_window": {
+    "total_input_tokens": 15234,
+    "total_output_tokens": 9412,
+    "context_window_size": 200000,
+    "current_usage": {
+      "input_tokens": 8500,
+      "output_tokens": 1200,
+      "cache_creation_input_tokens": 5000,
+      "cache_read_input_tokens": 12000
+    }
+  }
+}
+```
+
+### Schema Stability
+
+| Field | Stability | Notes |
+|-------|-----------|-------|
+| `model.id`, `model.display_name` | Stable | Core model identification |
+| `context_window.context_window_size` | Stable | Window size |
+| `context_window.current_usage.*` | Semi-stable | Token breakdown fields |
+| `cost.total_cost_usd` | Stable | Session cost |
+| `cost.total_duration_ms` | Stable | Session duration |
+| `transcript_path` | Semi-stable | Path to JSONL transcript |
+| `workspace.current_dir` | Stable | Working directory |
+
+> **Note:** ECW Status Line uses `safe_get()` for all field access, so missing or renamed fields will not crash the script. If Claude Code changes the schema, affected segments will show default values (0, empty string) rather than errors.
+
+---
+
 ## Docker and Containers
 
 ECW Status Line is hardened for container environments where `HOME` may not be set, the filesystem may be read-only, or no TTY is available.
@@ -685,6 +752,42 @@ unset HOME && echo '{"model":{"display_name":"Test"}}' | python3 statusline.py
 # Test with read-only state path (uses debug mode)
 ECW_DEBUG=1 echo '{"model":{"display_name":"Test"}}' | python3 statusline.py
 ```
+
+---
+
+## VS Code Integrated Terminal
+
+ECW Status Line works in the VS Code integrated terminal. VS Code's terminal uses `xterm-256color` and supports ANSI escape sequences and Unicode/emoji.
+
+> **Note:** VS Code compatibility is based on documented terminal capabilities (`xterm-256color`, ANSI support). Empirical testing across macOS/Windows/Linux VS Code environments has not yet been performed. Please report any display issues via GitHub Issues.
+
+### Setup
+
+No special configuration is needed. If you run Claude Code inside VS Code's terminal, the status line will display correctly.
+
+### Known Considerations
+
+| Item | Details |
+|------|---------|
+| ANSI colors | Fully supported (256-color mode) |
+| Emoji rendering | Supported in VS Code 1.70+ with a font that includes emoji glyphs |
+| Terminal width | VS Code terminal panels can be narrow; `auto_compact_width: 80` triggers compact mode automatically |
+| WSL Remote | If using VS Code + WSL Remote, the terminal runs inside WSL; use Linux installation instructions |
+| Font recommendation | Use a Nerd Font or font with emoji support (e.g., "Cascadia Code", "FiraCode Nerd Font") |
+
+### Disabling Emoji for VS Code
+
+If your VS Code font does not render emoji correctly, disable them:
+
+```json
+{
+  "display": {
+    "use_emoji": false
+  }
+}
+```
+
+This replaces all emoji and Unicode special characters with ASCII equivalents.
 
 ---
 

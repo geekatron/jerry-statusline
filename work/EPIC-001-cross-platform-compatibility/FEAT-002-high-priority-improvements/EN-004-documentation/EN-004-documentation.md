@@ -1,15 +1,15 @@
 # EN-004: Documentation Completion
 
 > **Type:** enabler
-> **Status:** pending
+> **Status:** done
 > **Priority:** high
 > **Impact:** high
 > **Enabler Type:** compliance
 > **Created:** 2026-02-03T00:00:00Z
 > **Due:** 2026-02-21
-> **Completed:** -
+> **Completed:** 2026-02-11
 > **Parent:** FEAT-002
-> **Owner:** -
+> **Owner:** Claude
 > **Effort:** 11h
 
 ---
@@ -33,24 +33,24 @@ Complete documentation gaps to enable user success on all supported platforms.
 
 | ID | Title | Status | Effort |
 |----|-------|--------|--------|
-| TASK-001 | Add container deployment documentation | pending | 3h |
-| TASK-002 | Document platform exclusions | pending | 1h |
-| TASK-003 | Add Claude Code schema dependency notes | pending | 2h |
-| TASK-004 | Add uninstall documentation | pending | 1h |
-| TASK-005 | Clarify WSL vs native Windows | pending | 1h |
-| TASK-006 | Add CI badge to README | pending | 0.5h |
-| TASK-007 | Update version changelog | pending | 0.5h |
+| TASK-001 | Add container deployment documentation | done (EN-002) | 3h |
+| TASK-002 | Document platform exclusions | done (EN-002) | 1h |
+| TASK-003 | Add Claude Code schema dependency notes | done | 2h |
+| TASK-004 | Add uninstall documentation | done (EN-002) | 1h |
+| TASK-005 | Clarify WSL vs native Windows | done | 1h |
+| TASK-006 | Add CI badge to README | done | 0.5h |
+| TASK-007 | Update version changelog | done | 0.5h |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] Container deployment guide in docs/
-- [ ] "Supported Platforms" section in GETTING_STARTED.md
-- [ ] "Unsupported Platforms" section listing Alpine Linux
-- [ ] "Uninstalling" section in GETTING_STARTED.md
-- [ ] WSL note in Windows installation section
-- [ ] CI status badge in README.md
+- [x] Container deployment guide in docs/ (completed by EN-002)
+- [x] "Supported Platforms" section in GETTING_STARTED.md (completed by EN-002)
+- [x] "Unsupported Platforms" section listing Alpine Linux (completed by EN-002)
+- [x] "Uninstalling" section in GETTING_STARTED.md (completed by EN-002)
+- [x] WSL note in Windows installation section
+- [x] CI status badge in README.md
 
 ---
 
@@ -71,5 +71,6 @@ Complete documentation gaps to enable user success on all supported platforms.
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-03 | Claude | pending | Enabler created |
+| 2026-02-11 | Claude | done | All tasks completed via FEAT-002 orchestration |
 
 ---
