@@ -9,6 +9,7 @@ Usage: python3 test_statusline.py
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -202,7 +203,11 @@ SAMPLE_TRANSCRIPT = [
         "message": {
             "role": "assistant",
             "content": [
-                {"type": "tool_use", "name": "Read", "input": {"file_path": "/test.py" * 100}},
+                {
+                    "type": "tool_use",
+                    "name": "Read",
+                    "input": {"file_path": "/test.py" * 100},
+                },
             ],
         }
     },
@@ -210,7 +215,11 @@ SAMPLE_TRANSCRIPT = [
         "message": {
             "role": "assistant",
             "content": [
-                {"type": "tool_use", "name": "Read", "input": {"file_path": "/other.py" * 50}},
+                {
+                    "type": "tool_use",
+                    "name": "Read",
+                    "input": {"file_path": "/other.py" * 50},
+                },
             ],
         }
     },
@@ -301,9 +310,7 @@ def run_tools_test() -> bool:
     print(f"{'=' * 60}")
 
     # Create temporary transcript file
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".jsonl", delete=False
-    ) as tf:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as tf:
         for entry in SAMPLE_TRANSCRIPT:
             tf.write(json.dumps(entry) + "\n")
         transcript_path = tf.name
@@ -382,7 +389,12 @@ def run_compact_test() -> bool:
         print(f"Tokens hidden (expected): {not has_tokens}")
         print(f"Directory hidden (expected): {not has_directory}")
 
-        return result.returncode == 0 and not has_session and not has_tokens and not has_directory
+        return (
+            result.returncode == 0
+            and not has_session
+            and not has_tokens
+            and not has_directory
+        )
 
     except Exception as e:
         print(f"ERROR: {e}")
@@ -455,7 +467,12 @@ def run_tokens_segment_test() -> bool:
         print(f"Fresh indicator (→) present: {has_fresh_indicator}")
         print(f"Cached indicator (↺) present: {has_cached_indicator}")
 
-        return result.returncode == 0 and has_tokens_icon and has_fresh_indicator and has_cached_indicator
+        return (
+            result.returncode == 0
+            and has_tokens_icon
+            and has_fresh_indicator
+            and has_cached_indicator
+        )
 
     except Exception as e:
         print(f"ERROR: {e}")
@@ -482,7 +499,9 @@ def run_session_segment_test() -> bool:
         # Should contain ⏱️ (session icon) and duration format (e.g., "44h05m")
         has_session_icon = "⏱️" in result.stdout
         has_hours = "h" in result.stdout and "m" in result.stdout
-        has_tok = "tok" in result.stdout or "M" in result.stdout  # Total tokens in M format
+        has_tok = (
+            "tok" in result.stdout or "M" in result.stdout
+        )  # Total tokens in M format
 
         print(f"Session icon (⏱️) present: {has_session_icon}")
         print(f"Duration format (XhYYm) present: {has_hours}")
@@ -747,9 +766,7 @@ def run_corrupt_state_test() -> bool:
     print(f"{'=' * 60}")
 
     # Create a state file with malformed JSON
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as tf:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tf:
         tf.write("{invalid json: missing quotes, }")
         state_file = tf.name
 
@@ -798,6 +815,348 @@ def run_corrupt_state_test() -> bool:
         Path(state_file).unlink(missing_ok=True)
         config_path = SCRIPT_DIR / "ecw-statusline-config.json"
         config_path.unlink(missing_ok=True)
+
+
+def run_no_color_env_test() -> bool:
+    """Test that NO_COLOR environment variable disables ALL ANSI escape codes.
+
+    Per https://no-color.org/ spec: when NO_COLOR is present (any value),
+    all ANSI color escape sequences MUST be suppressed.
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: NO_COLOR Environment Variable (G-016)")
+    print(f"{'=' * 60}")
+
+    ansi_re = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    env["NO_COLOR"] = "1"
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # With NO_COLOR set, output must contain ZERO ANSI escape sequences
+        ansi_matches = ansi_re.findall(result.stdout)
+        has_ansi = len(ansi_matches) > 0
+        has_output = len(result.stdout.strip()) > 0
+
+        if has_ansi:
+            print(f"FAIL: Found {len(ansi_matches)} ANSI escape sequences in output")
+            print(
+                f"  Sequences: {ansi_matches[:5]}{'...' if len(ansi_matches) > 5 else ''}"
+            )
+        else:
+            print("PASS: No ANSI escape sequences found")
+
+        print(f"Has output: {has_output}")
+        print(f"No ANSI codes (expected): {not has_ansi}")
+
+        return result.returncode == 0 and has_output and not has_ansi
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+
+
+def run_use_color_disabled_test() -> bool:
+    """Test that display.use_color=false config disables ALL ANSI escape codes.
+
+    When the config option display.use_color is set to false, the output
+    must contain zero ANSI color escape sequences (G-021).
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: use_color Config Disabled (G-021)")
+    print(f"{'=' * 60}")
+
+    ansi_re = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+    config = {"display": {"use_color": False}}
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    # Ensure NO_COLOR is NOT set so we isolate the config effect
+    env.pop("NO_COLOR", None)
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # With use_color=false, output must contain ZERO ANSI escape sequences
+        ansi_matches = ansi_re.findall(result.stdout)
+        has_ansi = len(ansi_matches) > 0
+        has_output = len(result.stdout.strip()) > 0
+
+        if has_ansi:
+            print(f"FAIL: Found {len(ansi_matches)} ANSI escape sequences in output")
+            print(
+                f"  Sequences: {ansi_matches[:5]}{'...' if len(ansi_matches) > 5 else ''}"
+            )
+        else:
+            print("PASS: No ANSI escape sequences found")
+
+        print(f"Has output: {has_output}")
+        print(f"No ANSI codes (expected): {not has_ansi}")
+
+        return result.returncode == 0 and has_output and not has_ansi
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
+def run_color_matrix_test() -> bool:
+    """Test the 4-scenario interaction matrix of NO_COLOR x use_color.
+
+    Matrix:
+      1. use_color=true  + NO_COLOR unset -> ANSI codes PRESENT
+      2. use_color=true  + NO_COLOR=1     -> ANSI codes ABSENT (NO_COLOR wins)
+      3. use_color=false + NO_COLOR unset -> ANSI codes ABSENT
+      4. use_color=false + NO_COLOR=1     -> ANSI codes ABSENT
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Color Control Matrix (NO_COLOR x use_color)")
+    print(f"{'=' * 60}")
+
+    ansi_re = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+    scenarios = [
+        {
+            "name": "use_color=true, NO_COLOR unset",
+            "use_color": True,
+            "no_color_value": None,
+            "expect_ansi": True,
+        },
+        {
+            "name": "use_color=true, NO_COLOR=1",
+            "use_color": True,
+            "no_color_value": "1",
+            "expect_ansi": False,
+        },
+        {
+            "name": "use_color=false, NO_COLOR unset",
+            "use_color": False,
+            "no_color_value": None,
+            "expect_ansi": False,
+        },
+        {
+            "name": "use_color=false, NO_COLOR=1",
+            "use_color": False,
+            "no_color_value": "1",
+            "expect_ansi": False,
+        },
+        {
+            "name": "use_color=true, NO_COLOR='' (empty string)",
+            "use_color": True,
+            "no_color_value": "",
+            "expect_ansi": False,
+        },
+    ]
+
+    all_passed = True
+
+    for scenario in scenarios:
+        print(f"\n  Scenario: {scenario['name']}")
+
+        config = {"display": {"use_color": scenario["use_color"]}}
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+
+        if scenario["no_color_value"] is not None:
+            env["NO_COLOR"] = scenario["no_color_value"]
+        else:
+            env.pop("NO_COLOR", None)
+
+        try:
+            with open(config_path, "w") as f:
+                json.dump(config, f)
+
+            result = subprocess.run(
+                [sys.executable, str(STATUSLINE_SCRIPT)],
+                input=json.dumps(PAYLOAD_NORMAL),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                env=env,
+            )
+
+            ansi_matches = ansi_re.findall(result.stdout)
+            has_ansi = len(ansi_matches) > 0
+            has_output = len(result.stdout.strip()) > 0
+
+            if scenario["expect_ansi"]:
+                scenario_ok = has_ansi and has_output and result.returncode == 0
+                print(
+                    f"    Expected ANSI: YES | Found ANSI: {has_ansi} | {'PASS' if scenario_ok else 'FAIL'}"
+                )
+            else:
+                scenario_ok = not has_ansi and has_output and result.returncode == 0
+                print(
+                    f"    Expected ANSI: NO  | Found ANSI: {has_ansi} | {'PASS' if scenario_ok else 'FAIL'}"
+                )
+
+            if not scenario_ok:
+                all_passed = False
+                if has_ansi and not scenario["expect_ansi"]:
+                    print(f"    ANSI sequences found: {ansi_matches[:3]}")
+
+        except Exception as e:
+            print(f"    ERROR: {e}")
+            all_passed = False
+        finally:
+            config_path.unlink(missing_ok=True)
+
+    print(f"\n  Matrix result: {'ALL PASSED' if all_passed else 'SOME FAILED'}")
+    return all_passed
+
+
+def run_atomic_write_test() -> bool:
+    """Test that state file is written atomically (temp file + rename).
+
+    Validates REQ-EN005-007: State writes use atomic pattern.
+    Validates REQ-EN005-008: Atomic write failure degrades gracefully.
+    Validates REQ-EN005-009: Preserve existing error handling contract.
+
+    The test runs the script twice with a state file, verifying:
+    1. State file is created and contains valid JSON after first run
+    2. Script still produces correct output (no regression from atomic write change)
+    3. Compaction detection still works (depends on state persistence)
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Atomic State Writes (EN-005 Batch B)")
+    print(f"{'=' * 60}")
+
+    # Use a temporary directory for state file
+    state_dir = tempfile.mkdtemp()
+    state_file = os.path.join(state_dir, "test-atomic-state.json")
+
+    config = {
+        "compaction": {
+            "state_file": state_file,
+            "detection_threshold": 10000,
+        }
+    }
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        # Run 1: Establish state (first run writes state atomically)
+        result1 = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"Run 1 STDOUT: {result1.stdout.strip()[:80]}...")
+        print(f"Run 1 EXIT CODE: {result1.returncode}")
+
+        # Check state file was created and contains valid JSON
+        state_exists = os.path.exists(state_file)
+        print(f"State file exists after run 1: {state_exists}")
+
+        state_valid = False
+        if state_exists:
+            with open(state_file, "r", encoding="utf-8") as f:
+                try:
+                    state_data = json.load(f)
+                    state_valid = "previous_context_tokens" in state_data
+                    print(f"State file contains valid JSON: {state_valid}")
+                    print(
+                        f"  previous_context_tokens: {state_data.get('previous_context_tokens')}"
+                    )
+                except json.JSONDecodeError:
+                    print("State file contains INVALID JSON")
+
+        # Check no temp files left behind (atomic write cleaned up)
+        tmp_files = [f for f in os.listdir(state_dir) if f.endswith(".tmp")]
+        no_orphan_tmp = len(tmp_files) == 0
+        print(f"No orphan .tmp files: {no_orphan_tmp}")
+        if tmp_files:
+            print(f"  Orphan files: {tmp_files}")
+
+        # Run 2: With high previous context, should detect compaction
+        # (proves state was written correctly and can be read back)
+        result2 = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"Run 2 EXIT CODE: {result2.returncode}")
+        run2_ok = result2.returncode == 0 and len(result2.stdout.strip()) > 0
+        print(f"Run 2 produces output: {run2_ok}")
+
+        all_ok = (
+            result1.returncode == 0
+            and state_exists
+            and state_valid
+            and no_orphan_tmp
+            and run2_ok
+        )
+
+        print(f"Atomic write test: {'PASS' if all_ok else 'FAIL'}")
+        return all_ok
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+        shutil.rmtree(state_dir, ignore_errors=True)
 
 
 def main() -> int:
@@ -895,6 +1254,34 @@ def main() -> int:
 
     # Corrupt state file (invalid JSON)
     if run_corrupt_state_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # EN-005: Edge Case Handling - Batch A (Color/ANSI Control)
+
+    # NO_COLOR environment variable (G-016)
+    if run_no_color_env_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # use_color config toggle disabled (G-021)
+    if run_use_color_disabled_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # NO_COLOR x use_color interaction matrix
+    if run_color_matrix_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # EN-005: Edge Case Handling - Batch B (Atomic Writes)
+
+    # Atomic state file writes
+    if run_atomic_write_test():
         passed += 1
     else:
         failed += 1

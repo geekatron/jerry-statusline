@@ -41,6 +41,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -65,6 +66,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "auto_compact_width": 80,
         "separator": " | ",
         "use_emoji": True,
+        "use_color": True,
         "progress_bar": {
             "width": 10,
             "filled_char": "▓",
@@ -77,8 +79,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "model": True,
         "context": True,
         "cost": True,
-        "tokens": True,      # Renamed from 'cache' - shows fresh/cached breakdown
-        "session": True,     # Now shows duration + total tokens
+        "tokens": True,  # Renamed from 'cache' - shows fresh/cached breakdown
+        "session": True,  # Now shows duration + total tokens
         "compaction": True,  # NEW: Shows token delta after compaction
         "tools": True,
         "git": True,
@@ -137,7 +139,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "green": 82,
         "yellow": 220,
         "red": 196,
-        "cyan": 87,      # For informational displays
+        "cyan": 87,  # For informational displays
         "opus": 75,
         "sonnet": 141,
         "haiku": 84,
@@ -146,9 +148,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "git_clean": 82,
         "git_dirty": 220,
         "tools": 147,
-        "tokens_fresh": 214,   # Orange for fresh tokens
-        "tokens_cached": 81,   # Cyan for cached tokens
-        "compaction": 213,     # Pink for compaction indicator
+        "tokens_fresh": 214,  # Orange for fresh tokens
+        "tokens_cached": 81,  # Cyan for cached tokens
+        "compaction": 213,  # Pink for compaction indicator
     },
     # Advanced settings
     "advanced": {
@@ -161,6 +163,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # =============================================================================
 # CONFIGURATION LOADING
 # =============================================================================
+
 
 def _get_config_paths() -> List[Path]:
     """Get config file search paths, handling missing HOME gracefully."""
@@ -258,7 +261,11 @@ def _resolve_state_path(config: Dict) -> Optional[Path]:
 
 def load_state(config: Dict) -> Dict[str, Any]:
     """Load previous state for compaction detection."""
-    default = {"previous_context_tokens": 0, "last_compaction_from": 0, "last_compaction_to": 0}
+    default = {
+        "previous_context_tokens": 0,
+        "last_compaction_from": 0,
+        "last_compaction_to": 0,
+    }
     state_file = _resolve_state_path(config)
 
     if state_file is None:
@@ -277,8 +284,9 @@ def load_state(config: Dict) -> Dict[str, Any]:
 def save_state(config: Dict, state: Dict[str, Any]) -> None:
     """Save current state for next invocation.
 
-    Handles read-only filesystems and missing HOME gracefully by logging
-    a debug warning rather than crashing.
+    Uses atomic write pattern (write to temp file, then rename) to prevent
+    corruption from partial writes. Handles read-only filesystems and missing
+    HOME gracefully by logging a debug warning rather than crashing.
     """
     state_file = _resolve_state_path(config)
 
@@ -288,8 +296,25 @@ def save_state(config: Dict, state: Dict[str, Any]) -> None:
 
     try:
         state_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(state_file, "w", encoding="utf-8") as f:
-            json.dump(state, f)
+        # Atomic write: write to temp file in same directory, then rename
+        fd = tempfile.NamedTemporaryFile(
+            mode="w",
+            dir=state_file.parent,
+            suffix=".tmp",
+            delete=False,
+            encoding="utf-8",
+        )
+        try:
+            json.dump(state, fd)
+            fd.close()  # Must close before os.replace on Windows
+            os.replace(fd.name, str(state_file))
+        except OSError:
+            fd.close()
+            try:
+                os.unlink(fd.name)
+            except OSError:
+                pass
+            raise
     except OSError as e:
         debug_log(f"State save failed: {e}")
 
@@ -299,15 +324,42 @@ def save_state(config: Dict, state: Dict[str, Any]) -> None:
 # =============================================================================
 
 
-def ansi_color(code: int) -> str:
-    """Generate ANSI 256-color escape sequence."""
+def _colors_enabled(config: Optional[Dict]) -> bool:
+    """Check whether ANSI color output is enabled.
+
+    Colors are disabled when:
+    - NO_COLOR environment variable is set (takes precedence, per no-color.org)
+    - display.use_color config is set to false
+    """
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    if config is not None and not safe_get(
+        config, "display", "use_color", default=True
+    ):
+        return False
+    return True
+
+
+def ansi_color(code: int, config: Optional[Dict] = None) -> str:
+    """Generate ANSI 256-color escape sequence.
+
+    Returns empty string when colors are disabled via NO_COLOR env var
+    or display.use_color config.
+    """
+    if not _colors_enabled(config):
+        return ""
     if code == 0:
         return "\033[0m"
     return f"\033[38;5;{code}m"
 
 
-def ansi_reset() -> str:
-    """Generate ANSI reset escape sequence."""
+def ansi_reset(config: Optional[Dict] = None) -> str:
+    """Generate ANSI reset escape sequence.
+
+    Returns empty string when colors are disabled.
+    """
+    if not _colors_enabled(config):
+        return ""
     return "\033[0m"
 
 
@@ -398,11 +450,15 @@ def _extract_tool_usage(entry: Dict, tool_tokens: Dict[str, int]) -> None:
                     tool_name = block.get("name", "unknown")
                     input_data = block.get("input", {})
                     token_estimate = _estimate_tokens(input_data)
-                    tool_tokens[tool_name] = tool_tokens.get(tool_name, 0) + token_estimate
+                    tool_tokens[tool_name] = (
+                        tool_tokens.get(tool_name, 0) + token_estimate
+                    )
                 elif block_type == "tool_result":
                     content_data = block.get("content", "")
                     token_estimate = _estimate_tokens(content_data)
-                    tool_tokens["results"] = tool_tokens.get("results", 0) + token_estimate
+                    tool_tokens["results"] = (
+                        tool_tokens.get("results", 0) + token_estimate
+                    )
 
     usage = entry.get("usage", {})
     if usage:
@@ -446,12 +502,16 @@ def extract_model_info(data: Dict) -> Tuple[str, str]:
 
 def extract_context_info(data: Dict, config: Dict) -> Tuple[float, int, int, bool]:
     """Extract context window usage."""
-    context_window_size = safe_get(data, "context_window", "context_window_size", default=200000)
+    context_window_size = safe_get(
+        data, "context_window", "context_window_size", default=200000
+    )
     current_usage = safe_get(data, "context_window", "current_usage")
 
     if current_usage:
         input_tokens = safe_get(current_usage, "input_tokens", default=0)
-        cache_creation = safe_get(current_usage, "cache_creation_input_tokens", default=0)
+        cache_creation = safe_get(
+            current_usage, "cache_creation_input_tokens", default=0
+        )
         cache_read = safe_get(current_usage, "cache_read_input_tokens", default=0)
         used_tokens = input_tokens + cache_creation + cache_read
         is_estimated = False
@@ -459,7 +519,10 @@ def extract_context_info(data: Dict, config: Dict) -> Tuple[float, int, int, boo
         used_tokens = safe_get(data, "context_window", "total_input_tokens", default=0)
         is_estimated = True
 
-    if used_tokens > context_window_size and config["advanced"]["handle_cumulative_bug"]:
+    if (
+        used_tokens > context_window_size
+        and config["advanced"]["handle_cumulative_bug"]
+    ):
         is_estimated = True
 
     percentage = (used_tokens / context_window_size) if context_window_size > 0 else 0
@@ -565,14 +628,14 @@ def extract_workspace_info(data: Dict, config: Dict) -> str:
         except (RuntimeError, KeyError, OSError):
             home = ""
         if home and current_dir.startswith(home):
-            current_dir = "~" + current_dir[len(home):]
+            current_dir = "~" + current_dir[len(home) :]
 
     if dir_config["basename_only"]:
         current_dir = os.path.basename(current_dir) or current_dir
 
     max_len = dir_config["max_length"]
     if len(current_dir) > max_len:
-        current_dir = "..." + current_dir[-(max_len - 3):]
+        current_dir = "..." + current_dir[-(max_len - 3) :]
 
     return current_dir
 
@@ -586,7 +649,9 @@ def extract_tools_info(data: Dict, config: Dict) -> List[Tuple[str, int]]:
     min_tokens = tools_config["min_tokens"]
     top_n = tools_config["top_n"]
 
-    filtered = [(name, tokens) for name, tokens in tool_tokens.items() if tokens >= min_tokens]
+    filtered = [
+        (name, tokens) for name, tokens in tool_tokens.items() if tokens >= min_tokens
+    ]
     sorted_tools = sorted(filtered, key=lambda x: x[1], reverse=True)
 
     return sorted_tools[:top_n]
@@ -665,8 +730,8 @@ def format_progress_bar(percentage: float, config: Dict, color_code: int) -> str
     empty_count = width - filled_count
 
     bar = filled_char * filled_count + empty_char * empty_count
-    color = ansi_color(color_code)
-    reset = ansi_reset()
+    color = ansi_color(color_code, config)
+    reset = ansi_reset(config)
 
     if show_pct:
         pct_str = f"{int(percentage * 100)}%"
@@ -732,8 +797,8 @@ def build_model_segment(data: Dict, config: Dict) -> str:
     icons = {"opus": "🔵", "sonnet": "🟣", "haiku": "🟢"}
     icon = icons.get(tier, "⚪") if config["display"]["use_emoji"] else ""
 
-    color = ansi_color(colors.get(tier, colors["sonnet"]))
-    reset = ansi_reset()
+    color = ansi_color(colors.get(tier, colors["sonnet"]), config)
+    reset = ansi_reset(config)
 
     if icon:
         return f"{color}{icon} {display_name}{reset}"
@@ -774,8 +839,8 @@ def build_cost_segment(data: Dict, config: Dict) -> str:
 
     currency = cost_config["currency_symbol"]
     icon = "💰 " if config["display"]["use_emoji"] else ""
-    color = ansi_color(color_code)
-    reset = ansi_reset()
+    color = ansi_color(color_code, config)
+    reset = ansi_reset(config)
 
     return f"{icon}{color}{currency}{cost:.2f}{reset}"
 
@@ -793,9 +858,9 @@ def build_tokens_segment(data: Dict, config: Dict) -> str:
     icon = "⚡ " if use_emoji else ""
     fresh_indicator = "→" if use_emoji else ">"
     cached_indicator = "↺" if use_emoji else "<"
-    fresh_color = ansi_color(colors["tokens_fresh"])
-    cached_color = ansi_color(colors["tokens_cached"])
-    reset = ansi_reset()
+    fresh_color = ansi_color(colors["tokens_fresh"], config)
+    cached_color = ansi_color(colors["tokens_cached"], config)
+    reset = ansi_reset(config)
 
     fresh_str = format_tokens_short(fresh)
     cached_str = format_tokens_short(cached)
@@ -817,8 +882,8 @@ def build_session_segment(data: Dict, config: Dict) -> str:
     total_tokens = total_input + total_output
     tokens_str = format_tokens_short(total_tokens)
 
-    color = ansi_color(colors["cyan"])
-    reset = ansi_reset()
+    color = ansi_color(colors["cyan"], config)
+    reset = ansi_reset(config)
 
     return f"{icon}{color}{duration_str} {tokens_str}tok{reset}"
 
@@ -838,8 +903,8 @@ def build_compaction_segment(data: Dict, config: Dict) -> str:
     use_emoji = config["display"]["use_emoji"]
     icon = "📉 " if use_emoji else "v "
     arrow = "→" if use_emoji else ">"
-    color = ansi_color(colors["compaction"])
-    reset = ansi_reset()
+    color = ansi_color(colors["compaction"], config)
+    reset = ansi_reset(config)
 
     from_str = format_tokens_short(from_tokens)
     to_str = format_tokens_short(to_tokens)
@@ -859,8 +924,8 @@ def build_tools_segment(data: Dict, config: Dict) -> str:
 
     colors = config["colors"]
     icon = "🔧 " if config["display"]["use_emoji"] else ""
-    color = ansi_color(colors["tools"])
-    reset = ansi_reset()
+    color = ansi_color(colors["tools"], config)
+    reset = ansi_reset(config)
 
     tool_strs = [f"{name}:{format_tokens_short(tokens)}" for name, tokens in tools]
     tools_display = " ".join(tool_strs)
@@ -884,7 +949,7 @@ def build_git_segment(data: Dict, config: Dict) -> str:
 
     if is_clean:
         status_icon = ("✓" if use_emoji else "+") if git_config["show_status"] else ""
-        color = ansi_color(colors["git_clean"])
+        color = ansi_color(colors["git_clean"], config)
     else:
         dirty_marker = "●" if use_emoji else "*"
         if git_config["show_uncommitted_count"]:
@@ -893,9 +958,9 @@ def build_git_segment(data: Dict, config: Dict) -> str:
             status_icon = dirty_marker
         else:
             status_icon = ""
-        color = ansi_color(colors["git_dirty"])
+        color = ansi_color(colors["git_dirty"], config)
 
-    reset = ansi_reset()
+    reset = ansi_reset(config)
 
     return f"{icon}{color}{branch} {status_icon}{reset}".strip()
 
@@ -906,8 +971,8 @@ def build_directory_segment(data: Dict, config: Dict) -> str:
     colors = config["colors"]
 
     icon = "📂 " if config["display"]["use_emoji"] else ""
-    color = ansi_color(colors["directory"])
-    reset = ansi_reset()
+    color = ansi_color(colors["directory"], config)
+    reset = ansi_reset(config)
 
     return f"{icon}{color}{directory}{reset}"
 
@@ -966,8 +1031,8 @@ def build_status_line(data: Dict, config: Dict) -> str:
     if segments_config["directory"] and not compact:
         segments.append(build_directory_segment(data, config))
 
-    sep_color = ansi_color(colors["separator"])
-    reset = ansi_reset()
+    sep_color = ansi_color(colors["separator"], config)
+    reset = ansi_reset(config)
     colored_sep = f"{sep_color}{separator}{reset}"
 
     return colored_sep.join(segments)

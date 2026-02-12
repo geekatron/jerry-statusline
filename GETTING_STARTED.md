@@ -16,9 +16,12 @@ A step-by-step guide to installing and configuring ECW Status Line for Claude Co
 5. [Configuration](#configuration)
 6. [Enabling the Tools Segment](#enabling-the-tools-segment)
 7. [Customization Examples](#customization-examples)
-8. [Docker and Containers](#docker-and-containers)
-9. [Troubleshooting](#troubleshooting)
-10. [Uninstallation](#uninstallation)
+8. [Advanced Configuration](#advanced-configuration)
+9. [Docker and Containers](#docker-and-containers)
+10. [Windows UNC Paths](#windows-unc-paths)
+11. [SSH and tmux](#ssh-and-tmux)
+12. [Troubleshooting](#troubleshooting)
+13. [Uninstallation](#uninstallation)
 
 ---
 
@@ -265,7 +268,7 @@ echo '{"model":{"display_name":"Test"}}' | python3 ~/.claude/statusline.py
 
 **Expected output:**
 ```
-🟣 Test | 📊 ~[░░░░░░░░░░] 0% | 💰 $0.00 | ⚡ 0% | ⏱️ 0m [░░░░░░░░░░] 0% | 📂 ~
+🟣 Test | 📊 ~[░░░░░░░░░░] 0% | 💰 $0.00 | ⚡ 0→ 0↺ | ⏱️ 0m 0tok | 📂 ~
 ```
 
 If you see colored output with emoji, the script is working correctly.
@@ -346,7 +349,7 @@ echo '{"model":{"display_name":"Test"}}' | python "$env:USERPROFILE\.claude\stat
 
 **Expected output:**
 ```
-🟣 Test | 📊 ~[░░░░░░░░░░] 0% | 💰 $0.00 | ⚡ 0% | ⏱️ 0m [░░░░░░░░░░] 0% | 📂 ~
+🟣 Test | 📊 ~[░░░░░░░░░░] 0% | 💰 $0.00 | ⚡ 0→ 0↺ | ⏱️ 0m 0tok | 📂 ~
 ```
 
 #### Step 4: Configure Claude Code
@@ -446,7 +449,7 @@ After installation, start Claude Code and verify the status line appears at the 
 ### What you should see
 
 ```
-🟣 Sonnet | 📊 [░░░░░░░░░░] 0% | 💰 $0.00 | ⚡ 0% | ⏱️ 0m [░░░░░░░░░░] 0% | 🌿 main ✓ | ~/your-project
+🟣 Sonnet | 📊 [░░░░░░░░░░] 0% | 💰 $0.00 | ⚡ 0→ 0↺ | ⏱️ 0m 0tok | 🌿 main ✓ | 📂 ~/your-project
 ```
 
 ### Segment breakdown
@@ -456,10 +459,10 @@ After installation, start Claude Code and verify the status line appears at the 
 | 🟣 Sonnet | Active model | Should match your current model |
 | 📊 [░░░░░░░░░░] 0% | Context window usage | Starts at 0%, increases as you chat |
 | 💰 $0.00 | Session cost | Starts at $0.00, increases with usage |
-| ⚡ 0% | Cache efficiency | Shows % of tokens served from cache |
-| ⏱️ 0m | Session duration | Time since session started |
+| ⚡ 0→ 0↺ | Token breakdown (fresh→ cached↺) | Shows fresh vs cached input tokens |
+| ⏱️ 0m 0tok | Session duration + total tokens | Time since session started |
 | 🌿 main ✓ | Git branch + status | Your current branch, ✓=clean ●=dirty |
-| ~/your-project | Working directory | Your current directory |
+| 📂 ~/your-project | Working directory | Your current directory |
 
 ### Verification checklist
 
@@ -524,7 +527,9 @@ You only need to specify values you want to change. All other settings use defau
 | `cost.yellow_max` | 5.00 | Max cost ($) for yellow |
 | `display.compact_mode` | false | Show fewer segments |
 | `display.use_emoji` | true | Use emoji icons |
+| `display.use_color` | true | Enable/disable ANSI color codes |
 | `tools.enabled` | false | Show tools segment |
+| `advanced.git_timeout` | 2 | Git command timeout in seconds |
 
 See [README.md](README.md) for complete configuration reference.
 
@@ -627,7 +632,7 @@ Sonnet | [▓▓▓▓░░░░░░] 42% | $1.23 | 78% | 2h12m | main ✓ |
 ```json
 {
   "segments": {
-    "cache": false,
+    "tokens": false,
     "session": false,
     "git": false,
     "directory": false
@@ -653,6 +658,65 @@ Sonnet | [▓▓▓▓░░░░░░] 42% | $1.23 | 78% | 2h12m | main ✓ |
   }
 }
 ```
+
+---
+
+## Advanced Configuration
+
+### Git Timeout
+
+For large monorepos where git operations may be slow, increase the git timeout (default: 2 seconds):
+
+```json
+{
+  "advanced": {
+    "git_timeout": 5
+  }
+}
+```
+
+If your repository is very large and git operations still time out, you can disable the git segment entirely:
+
+```json
+{
+  "segments": {
+    "git": false
+  }
+}
+```
+
+### Color Control
+
+#### Disabling Colors via Configuration
+
+To disable all ANSI color codes (useful for terminals without color support):
+
+```json
+{
+  "display": {
+    "use_color": false
+  }
+}
+```
+
+This produces plain text output without any ANSI escape sequences. Emoji icons are still shown unless separately disabled with `"use_emoji": false`.
+
+#### NO_COLOR Environment Variable
+
+ECW Status Line respects the [NO_COLOR](https://no-color.org/) standard. When the `NO_COLOR` environment variable is set (to any value), all ANSI color codes are suppressed:
+
+```bash
+export NO_COLOR=1
+```
+
+**Precedence:** `NO_COLOR` environment variable takes absolute precedence over the `use_color` configuration option. When `NO_COLOR` is set, colors are always disabled regardless of config.
+
+| NO_COLOR | use_color | Result |
+|----------|-----------|--------|
+| Not set | true (default) | Colors enabled |
+| Not set | false | Colors disabled |
+| Set | true | Colors disabled (NO_COLOR wins) |
+| Set | false | Colors disabled |
 
 ---
 
@@ -788,6 +852,82 @@ If your VS Code font does not render emoji correctly, disable them:
 ```
 
 This replaces all emoji and Unicode special characters with ASCII equivalents.
+
+---
+
+## Windows UNC Paths
+
+### Known Limitations
+
+UNC paths (`\\server\share\path`) are **not officially supported** by ECW Status Line. The script uses `pathlib.Path` internally, which handles UNC paths inconsistently across Python versions and Windows configurations.
+
+### Symptoms
+
+If your Claude Code working directory uses a UNC path, you may see:
+- Incorrect directory display in the status line
+- Git segment not appearing (git may not resolve the repo)
+- State file not saved (path resolution failure)
+
+### Recommendations
+
+| Scenario | Solution |
+|----------|----------|
+| Network drive | Map to a drive letter (e.g., `Z:\`) instead of using `\\server\share` |
+| WSL | Use Linux paths inside WSL (e.g., `/home/user/project`) |
+| Mounted share | Use the mount point path, not the UNC path |
+
+> **Note:** This limitation applies only to the working directory path displayed by Claude Code. The script itself should be installed locally (`~/.claude/statusline.py`), not on a network share.
+
+---
+
+## SSH and tmux
+
+> **Note:** SSH and tmux guidance below is based on standard terminal capabilities and common configurations. Empirical testing across all SSH client/server combinations and tmux versions has not been performed. Please report any issues via GitHub Issues.
+
+### SSH Remote Sessions
+
+ECW Status Line works in SSH sessions with the following requirements:
+
+| Requirement | Details |
+|-------------|---------|
+| TERM variable | Must be set to a value supporting ANSI (e.g., `xterm-256color`) |
+| Python 3.9+ | Must be installed on the remote host |
+| Claude Code | Must be running on the remote host |
+
+**Common SSH issues:**
+
+```bash
+# If TERM is not set correctly over SSH:
+export TERM=xterm-256color
+
+# If colors don't work, try:
+echo $TERM  # Should be xterm-256color or similar
+
+# If emoji don't render over SSH, disable them:
+# Add to ecw-statusline-config.json:
+# {"display": {"use_emoji": false}}
+```
+
+### tmux Sessions
+
+ECW Status Line works inside tmux with proper configuration:
+
+```bash
+# Ensure tmux uses 256 colors
+# Add to ~/.tmux.conf:
+set -g default-terminal "screen-256color"
+
+# Or start tmux with:
+tmux -2  # Forces 256 color mode
+```
+
+| Issue | Solution |
+|-------|----------|
+| No colors in tmux | Add `set -g default-terminal "screen-256color"` to `~/.tmux.conf` |
+| Garbled emoji in tmux | Use `tmux -2` flag or disable emoji via config |
+| Status line not updating | Ensure Claude Code's status hook runs in the tmux pane |
+
+> **Tip:** If you use both SSH and tmux (SSH into a server, then attach tmux), ensure TERM is set correctly in BOTH the SSH connection and the tmux session.
 
 ---
 
@@ -1014,16 +1154,18 @@ notepad "$env:USERPROFILE\.claude\settings.json"
 ### Status Line Segments
 
 ```
-🔵/🟣/🟢 Model | 📊 Context | 💰 Cost | ⚡ Cache | ⏱️ Session | 🔧 Tools | 🌿 Git | 📂 Dir
+🔵/🟣/🟢 Model | 📊 Context | 💰 Cost | ⚡ Tokens | ⏱️ Session | 📉 Compaction | 🔧 Tools | 🌿 Git | 📂 Dir
 ```
 
 ### Color Meanings
 
-| Color | Context | Cost | Cache | Session |
-|-------|---------|------|-------|---------|
-| 🟢 Green | <65% | <$1 | >60% | <50% |
-| 🟡 Yellow | 65-85% | $1-5 | 30-60% | 50-80% |
-| 🔴 Red | >85% | >$5 | <30% | >80% |
+| Color | Context | Cost |
+|-------|---------|------|
+| 🟢 Green | <65% | <$1 |
+| 🟡 Yellow | 65-85% | $1-5 |
+| 🔴 Red | >85% | >$5 |
+
+> **Note:** Only Context and Cost segments use threshold-based coloring. Token breakdown (⚡) and Session (⏱️) use fixed informational colors.
 
 ### Debug Command
 
