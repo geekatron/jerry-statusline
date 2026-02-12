@@ -1,7 +1,7 @@
 # BUG-002: os.rmdir Fails on Windows Temp Dir Cleanup
 
 > **Type:** bug
-> **Status:** done
+> **Status:** completed
 > **Priority:** critical
 > **Impact:** high
 > **Created:** 2026-02-11T16:00:00Z
@@ -48,7 +48,7 @@ Replace `os.rmdir(readonly_dir)` with `shutil.rmtree(readonly_dir, ignore_errors
 
 | ID | Title | Status |
 |----|-------|--------|
-| T-001 | Replace os.rmdir with shutil.rmtree in test cleanup | done |
+| T-001 | Replace os.rmdir with shutil.rmtree in test cleanup | completed |
 
 ---
 
@@ -57,6 +57,6 @@ Replace `os.rmdir(readonly_dir)` with `shutil.rmtree(readonly_dir, ignore_errors
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-11 | Claude | in_progress | Bug identified from CI run 21912030014 |
-| 2026-02-11 | Claude | done | Fixed: replaced os.rmdir() with shutil.rmtree(ignore_errors=True), added import shutil |
+| 2026-02-11 | Claude | completed | Fixed: replaced os.rmdir() with shutil.rmtree(ignore_errors=True), added import shutil |
 
 ---

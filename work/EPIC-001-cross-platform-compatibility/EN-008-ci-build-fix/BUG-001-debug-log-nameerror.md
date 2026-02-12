@@ -1,7 +1,7 @@
 # BUG-001: debug_log NameError on Windows CI
 
 > **Type:** bug
-> **Status:** done
+> **Status:** completed
 > **Priority:** critical
 > **Impact:** high
 > **Created:** 2026-02-11T16:00:00Z
@@ -51,7 +51,7 @@ Remove the `debug_log()` call from `_get_config_paths()` since it runs before `d
 
 | ID | Title | Status |
 |----|-------|--------|
-| T-001 | Remove debug_log call from _get_config_paths except block | done |
+| T-001 | Remove debug_log call from _get_config_paths except block | completed |
 
 ---
 
@@ -60,6 +60,6 @@ Remove the `debug_log()` call from `_get_config_paths()` since it runs before `d
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-11 | Claude | in_progress | Bug identified from CI run 21912030014 |
-| 2026-02-11 | Claude | done | Fixed: replaced debug_log() call with pass in except block |
+| 2026-02-11 | Claude | completed | Fixed: replaced debug_log() call with pass in except block |
 
 ---

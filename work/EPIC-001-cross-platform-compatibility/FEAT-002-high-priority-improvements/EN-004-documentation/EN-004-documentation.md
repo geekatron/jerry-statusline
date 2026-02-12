@@ -1,7 +1,7 @@
 # EN-004: Documentation Completion
 
 > **Type:** enabler
-> **Status:** done
+> **Status:** completed
 > **Priority:** high
 > **Impact:** high
 > **Enabler Type:** compliance
@@ -33,13 +33,13 @@ Complete documentation gaps to enable user success on all supported platforms.
 
 | ID | Title | Status | Effort |
 |----|-------|--------|--------|
-| TASK-001 | Add container deployment documentation | done (EN-002) | 3h |
-| TASK-002 | Document platform exclusions | done (EN-002) | 1h |
-| TASK-003 | Add Claude Code schema dependency notes | done | 2h |
-| TASK-004 | Add uninstall documentation | done (EN-002) | 1h |
-| TASK-005 | Clarify WSL vs native Windows | done | 1h |
-| TASK-006 | Add CI badge to README | done | 0.5h |
-| TASK-007 | Update version changelog | done | 0.5h |
+| TASK-001 | Add container deployment documentation | completed (EN-002) | 3h |
+| TASK-002 | Document platform exclusions | completed (EN-002) | 1h |
+| TASK-003 | Add Claude Code schema dependency notes | completed | 2h |
+| TASK-004 | Add uninstall documentation | completed (EN-002) | 1h |
+| TASK-005 | Clarify WSL vs native Windows | completed | 1h |
+| TASK-006 | Add CI badge to README | completed | 0.5h |
+| TASK-007 | Update version changelog | completed | 0.5h |
 
 ---
 
@@ -71,6 +71,6 @@ Complete documentation gaps to enable user success on all supported platforms.
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-03 | Claude | pending | Enabler created |
-| 2026-02-11 | Claude | done | All tasks completed via FEAT-002 orchestration |
+| 2026-02-11 | Claude | completed | All tasks completed via FEAT-002 orchestration |
 
 ---
