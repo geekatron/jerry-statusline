@@ -1,0 +1,103 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, 'claude/*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-suffix: ${{ matrix.os }}-${{ matrix.python-version }}
+
+      - name: Display Python version
+        run: uv run python --version
+
+      - name: Run tests
+        run: uv run python test_statusline.py
+        env:
+          PYTHONUTF8: "1"
+
+      - name: Run statusline with sample input (smoke test)
+        shell: bash
+        run: |
+          echo '{"model":{"id":"claude-sonnet-4","display_name":"Sonnet"},"cost":{"total_cost_usd":0.50},"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":5000,"cache_read_input_tokens":10000}}}' | uv run python statusline.py
+        env:
+          PYTHONUTF8: "1"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+          enable-cache: true
+
+      - name: Run ruff check
+        run: uv run --with ruff ruff check statusline.py test_statusline.py
+
+      - name: Run ruff format check
+        run: uv run --with ruff ruff format --check statusline.py test_statusline.py
+        continue-on-error: true
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for secret scanning
+
+      - name: Install Gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz | tar -xzf - -C /usr/local/bin gitleaks
+
+      - name: Gitleaks - Secret Scanning
+        run: gitleaks detect --source . --verbose --exit-code 1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+
+      - name: Bandit - Python Security Linter
+        run: |
+          # Run bandit with medium+ severity filter - exits non-zero if issues found
+          uv run --with bandit bandit -r statusline.py -ll -ii
+
+      - name: Trivy - Vulnerability Scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
