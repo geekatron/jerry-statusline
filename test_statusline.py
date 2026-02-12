@@ -1159,6 +1159,386 @@ def run_atomic_write_test() -> bool:
         shutil.rmtree(state_dir, ignore_errors=True)
 
 
+# =============================================================================
+# EN-006 Tests: Platform Expansion - Schema Version Checking + Upgrade Docs
+# =============================================================================
+
+
+def run_schema_version_in_config_test() -> bool:
+    """Test that DEFAULT_CONFIG contains a schema_version field.
+
+    TASK-002: Schema version checking.
+    The DEFAULT_CONFIG embedded in statusline.py must include a top-level
+    'schema_version' key so that config files can be version-tracked.
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Schema Version in DEFAULT_CONFIG (EN-006 TASK-002)")
+    print(f"{'=' * 60}")
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    # Run a Python snippet that imports DEFAULT_CONFIG and checks for schema_version
+    check_script = (
+        "import json, sys; sys.path.insert(0, ''); "
+        "from statusline import DEFAULT_CONFIG; "
+        "has_key = 'schema_version' in DEFAULT_CONFIG; "
+        "print(json.dumps({'has_schema_version': has_key, 'value': DEFAULT_CONFIG.get('schema_version')})); "
+        "sys.exit(0 if has_key else 1)"
+    )
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", check_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+            cwd=str(SCRIPT_DIR),
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        has_version = result.returncode == 0
+        print(f"DEFAULT_CONFIG has schema_version: {has_version}")
+
+        return has_version
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+
+
+def run_schema_version_in_state_test() -> bool:
+    """Test that saved state files include a schema_version field.
+
+    TASK-002: Schema version checking.
+    When the script saves state (via save_state), the resulting JSON file
+    must include a 'schema_version' field for forward compatibility.
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Schema Version in State File (EN-006 TASK-002)")
+    print(f"{'=' * 60}")
+
+    state_dir = tempfile.mkdtemp()
+    state_file = os.path.join(state_dir, "test-schema-state.json")
+
+    config = {
+        "compaction": {
+            "state_file": state_file,
+            "detection_threshold": 10000,
+        }
+    }
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        # Run the script to trigger state save
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"Script EXIT CODE: {result.returncode}")
+
+        # Check the saved state file for schema_version
+        has_schema_version = False
+        if os.path.exists(state_file):
+            with open(state_file, "r", encoding="utf-8") as f:
+                state_data = json.load(f)
+                has_schema_version = "schema_version" in state_data
+                print(f"State file contents: {json.dumps(state_data)}")
+                print(f"State has schema_version: {has_schema_version}")
+        else:
+            print("State file was not created")
+
+        return has_schema_version
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+        shutil.rmtree(state_dir, ignore_errors=True)
+
+
+def run_schema_version_mismatch_warning_test() -> bool:
+    """Test that a schema version mismatch produces a warning in output.
+
+    TASK-002: Schema version checking.
+    When the user's config file contains a schema_version that differs from
+    the script's expected schema_version, the output should include a
+    warning indicator (e.g., containing 'version' or 'mismatch' or a
+    warning icon) to alert the user that their config may be outdated.
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Schema Version Mismatch Warning (EN-006 TASK-002)")
+    print(f"{'=' * 60}")
+
+    # Create a config with a mismatched schema version (very old version)
+    config = {"schema_version": "0"}
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    # Enable debug mode so debug_log() warnings are visible in stderr
+    env["ECW_DEBUG"] = "1"
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Look for version mismatch warning in stdout or stderr
+        combined_output = result.stdout + result.stderr
+        has_warning = (
+            "version" in combined_output.lower()
+            and ("mismatch" in combined_output.lower()
+                 or "outdated" in combined_output.lower()
+                 or "upgrade" in combined_output.lower()
+                 or "warning" in combined_output.lower())
+        ) or "⚠" in combined_output
+
+        print(f"Version mismatch warning present: {has_warning}")
+
+        return result.returncode == 0 and has_warning
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
+def run_unversioned_config_backward_compat_test() -> bool:
+    """Test backward compatibility when config has no schema_version.
+
+    TASK-002: Schema version checking.
+    When the config file has NO schema_version field at all (legacy config),
+    the script should still work without crashing - treating it as v1.0 for
+    backward compatibility. No version mismatch warning should appear.
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Unversioned Config Backward Compat (EN-006 TASK-002)")
+    print(f"{'=' * 60}")
+
+    # Config with no schema_version - simulates a pre-EN-006 config
+    config = {"cost": {"currency_symbol": "$"}}
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    try:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Should NOT crash - produces valid output
+        has_output = len(result.stdout.strip()) > 0
+        no_crash = result.returncode == 0
+
+        # Should NOT have a version mismatch warning
+        combined_output = result.stdout + result.stderr
+        has_mismatch_warning = (
+            "mismatch" in combined_output.lower()
+            or "outdated" in combined_output.lower()
+        )
+
+        print(f"Produces output without crash: {has_output and no_crash}")
+        print(f"No mismatch warning (expected): {not has_mismatch_warning}")
+
+        return no_crash and has_output and not has_mismatch_warning
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
+def run_schema_version_match_no_warning_test() -> bool:
+    """Test that matching schema_version produces no warning.
+
+    TASK-002: Schema version checking.
+    When the config file's schema_version matches the script's expected
+    schema_version, no version warning should appear in output.
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Schema Version Match No Warning (EN-006 TASK-002)")
+    print(f"{'=' * 60}")
+
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+
+    # First, get the expected schema_version from DEFAULT_CONFIG
+    # (This test assumes it will exist after TASK-002 implementation)
+    get_version_script = (
+        "import sys; sys.path.insert(0, ''); "
+        "from statusline import DEFAULT_CONFIG; "
+        "v = DEFAULT_CONFIG.get('schema_version', ''); "
+        "print(v)"
+    )
+
+    try:
+        version_result = subprocess.run(
+            [sys.executable, "-c", get_version_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+            cwd=str(SCRIPT_DIR),
+        )
+
+        expected_version = version_result.stdout.strip()
+        print(f"Expected schema_version from DEFAULT_CONFIG: '{expected_version}'")
+
+        if not expected_version:
+            print("FAIL: DEFAULT_CONFIG has no schema_version yet (expected for RED phase)")
+            return False
+
+        # Create a config with the matching schema_version
+        config = {"schema_version": expected_version}
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        result = subprocess.run(
+            [sys.executable, str(STATUSLINE_SCRIPT)],
+            input=json.dumps(PAYLOAD_NORMAL),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            env=env,
+        )
+
+        print(f"STDOUT: {result.stdout.strip()}")
+        if result.stderr:
+            print(f"STDERR: {result.stderr.strip()}")
+        print(f"EXIT CODE: {result.returncode}")
+
+        # Should NOT have any version warning
+        combined_output = result.stdout + result.stderr
+        has_version_warning = (
+            "mismatch" in combined_output.lower()
+            or "outdated" in combined_output.lower()
+            or "⚠" in combined_output
+        )
+
+        has_output = len(result.stdout.strip()) > 0
+        no_crash = result.returncode == 0
+
+        print(f"No version warning (expected): {not has_version_warning}")
+        print(f"Valid output: {has_output and no_crash}")
+
+        return no_crash and has_output and not has_version_warning
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+    finally:
+        config_path = SCRIPT_DIR / "ecw-statusline-config.json"
+        config_path.unlink(missing_ok=True)
+
+
+def run_upgrade_docs_exist_test() -> bool:
+    """Test that GETTING_STARTED.md contains an Upgrade/Migration section.
+
+    TASK-001: Upgrade path documentation.
+    The GETTING_STARTED.md must include a section heading containing
+    'Upgrade' or 'Migration' to guide users upgrading between versions.
+    """
+    print(f"\n{'=' * 60}")
+    print("TEST: Upgrade Docs Exist in GETTING_STARTED.md (EN-006 TASK-001)")
+    print(f"{'=' * 60}")
+
+    getting_started_path = SCRIPT_DIR / "GETTING_STARTED.md"
+
+    try:
+        if not getting_started_path.exists():
+            print("FAIL: GETTING_STARTED.md not found")
+            return False
+
+        with open(getting_started_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Look for a markdown heading containing "Upgrade" or "Migration"
+        # Matches ## Upgrade, ## Migration, ## Upgrading, ## Migration Guide, etc.
+        upgrade_pattern = re.compile(
+            r"^#{1,3}\s+.*(?:Upgrade|Migration|Upgrading|Migrating).*$",
+            re.IGNORECASE | re.MULTILINE,
+        )
+
+        matches = upgrade_pattern.findall(content)
+        has_upgrade_section = len(matches) > 0
+
+        if has_upgrade_section:
+            print(f"Found upgrade section heading(s): {matches}")
+        else:
+            print("No upgrade/migration section heading found")
+
+        print(f"Upgrade docs present: {has_upgrade_section}")
+
+        return has_upgrade_section
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return False
+
+
 def main() -> int:
     """Run all tests."""
     print("ECW Status Line - Test Suite v2.1.0")
@@ -1282,6 +1662,44 @@ def main() -> int:
 
     # Atomic state file writes
     if run_atomic_write_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # EN-006: Platform Expansion - Schema Version Checking + Upgrade Docs
+
+    # Schema version in DEFAULT_CONFIG
+    if run_schema_version_in_config_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Schema version in saved state files
+    if run_schema_version_in_state_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Schema version mismatch produces warning
+    if run_schema_version_mismatch_warning_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Unversioned config backward compatibility
+    if run_unversioned_config_backward_compat_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Matching schema version produces no warning
+    if run_schema_version_match_no_warning_test():
+        passed += 1
+    else:
+        failed += 1
+
+    # Upgrade documentation exists in GETTING_STARTED.md
+    if run_upgrade_docs_exist_test():
         passed += 1
     else:
         failed += 1

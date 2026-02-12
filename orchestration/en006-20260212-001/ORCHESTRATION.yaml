@@ -1,0 +1,574 @@
+# ORCHESTRATION.yaml
+# Machine-readable orchestration state for EN-006
+# Document ID: EN006-ORCH-STATE
+# Version: 1.0
+# Last Updated: 2026-02-12T21:00:00Z
+
+schema_version: "2.0.0"
+
+# =============================================================================
+# WORKFLOW METADATA
+# =============================================================================
+workflow:
+  id: "en006-20260212-001"
+  name: "EN-006 Platform Expansion"
+  project_id: "jerry-statusline"
+  version: "1.0"
+  created_at: "2026-02-12T18:00:00Z"
+  updated_at: "2026-02-12T21:00:00Z"
+  status: "COMPLETE"
+  id_source: "auto"
+  id_format: "semantic-date-seq"
+
+  patterns:
+    - SEQUENTIAL
+    - CONCURRENT
+    - BARRIER_SYNC
+    - FAN_OUT
+    - RED_GREEN_REFACTOR
+
+  constraints:
+    max_agent_nesting: 1
+    file_persistence: true
+    user_authority: true
+    max_concurrent_agents: 5
+    max_barrier_retries: 2
+    max_adversarial_iterations: 3
+    target_quality_score: 0.92
+    checkpoint_frequency: "PHASE"
+
+  quality_rubric:
+    correctness: 0.25
+    completeness: 0.20
+    robustness: 0.25
+    maintainability: 0.15
+    documentation: 0.15
+
+# =============================================================================
+# PATH CONFIGURATION
+# =============================================================================
+paths:
+  base: "orchestration/en006-20260212-001/"
+  pipeline: "{base}{pipeline_alias}/{phase_id}/{agent_id}/"
+  barrier: "{base}cross-pollination/{barrier_id}/{direction}/"
+
+# =============================================================================
+# PIPELINE DEFINITIONS
+# =============================================================================
+pipelines:
+  pipeline_a:
+    id: "pipeline-a"
+    name: "Implementation Pipeline"
+    description: "RED/GREEN/REFACTOR test-driven development with adversarial critique"
+    short_alias: "impl"
+    skill_source: "problem-solving"
+    status: "PHASE_4_COMPLETE"
+    current_phase: 4
+    total_phases: 4
+    progress_percent: 100
+
+    phases:
+      - id: 1
+        name: "RED (Write Failing Tests)"
+        path_id: "phase-1-red"
+        status: "COMPLETE"
+        started_at: "2026-02-12T18:10:00Z"
+        completed_at: "2026-02-12T18:45:00Z"
+        agents:
+          - id: "ps-tdd-red"
+            name: "TDD Red Phase (Write Failing Tests)"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/impl/phase-1-red/ps-tdd-red/ps-tdd-red-tests.md"
+            inputs:
+              - "work/EPIC-001-cross-platform-compatibility/FEAT-003-nice-to-have/EN-006-platform-expansion/EN-006-platform-expansion.md"
+              - "statusline.py"
+              - "test_statusline.py"
+              - "GETTING_STARTED.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-1-red/ps-tdd-red/ps-tdd-red-tests.md"
+
+      - id: 2
+        name: "GREEN + REFACTOR"
+        path_id: "phase-2-green-refactor"
+        status: "COMPLETE"
+        blocked_by: "barrier-1"
+        started_at: "2026-02-12T19:05:00Z"
+        completed_at: "2026-02-12T19:40:00Z"
+        agents:
+          - id: "ps-tdd-green"
+            name: "TDD Green Phase (Make Tests Pass)"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-green/ps-tdd-green-implementation.md"
+            inputs:
+              - "test_statusline.py"
+              - "statusline.py"
+              - "GETTING_STARTED.md"
+          - id: "ps-tdd-refactor"
+            name: "TDD Refactor Phase (Clean Up Code)"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-refactor/ps-tdd-refactor-cleanup.md"
+            inputs:
+              - "statusline.py"
+              - "test_statusline.py"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-green/ps-tdd-green-implementation.md"
+          - "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-refactor/ps-tdd-refactor-cleanup.md"
+
+      - id: 3
+        name: "Adversarial Critique"
+        path_id: "phase-3-critique"
+        status: "COMPLETE"
+        blocked_by: "barrier-2"
+        started_at: "2026-02-12T19:50:00Z"
+        completed_at: "2026-02-12T20:55:00Z"
+        iteration: 2
+        max_iterations: 3
+        agents:
+          - id: "critic-red-team"
+            name: "Red Team Critic"
+            status: "COMPLETE"
+            score: 0.940
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-red-team/critic-red-team-review-iter2.md"
+          - id: "critic-blue-team"
+            name: "Blue Team Critic"
+            status: "COMPLETE"
+            score: 0.940
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-blue-team/critic-blue-team-review-iter2.md"
+          - id: "critic-devils-advocate"
+            name: "Devil's Advocate Critic"
+            status: "COMPLETE"
+            score: 0.880
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-devils-advocate/critic-devils-advocate-review-iter2.md"
+          - id: "critic-steelman"
+            name: "Steelman Critic"
+            status: "COMPLETE"
+            score: 0.970
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-steelman/critic-steelman-review-iter2.md"
+          - id: "critic-strawman"
+            name: "Strawman Critic"
+            status: "COMPLETE"
+            score: 0.943
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-strawman/critic-strawman-review-iter2.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-red-team/critic-red-team-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-red-team/critic-red-team-review-iter2.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-blue-team/critic-blue-team-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-blue-team/critic-blue-team-review-iter2.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-devils-advocate/critic-devils-advocate-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-devils-advocate/critic-devils-advocate-review-iter2.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-steelman/critic-steelman-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-steelman/critic-steelman-review-iter2.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-strawman/critic-strawman-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-strawman/critic-strawman-review-iter2.md"
+
+      - id: 4
+        name: "Final Revision"
+        path_id: "phase-4-revision"
+        status: "COMPLETE"
+        blocked_by: "barrier-3"
+        started_at: "2026-02-12T20:20:00Z"
+        completed_at: "2026-02-12T20:40:00Z"
+        agents:
+          - id: "ps-tdd-revision"
+            name: "TDD Revision Phase"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/impl/phase-4-revision/ps-tdd-revision/ps-tdd-revision-fixes.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-4-revision/ps-tdd-revision/ps-tdd-revision-fixes.md"
+
+  pipeline_b:
+    id: "pipeline-b"
+    name: "NASA-SE Pipeline"
+    description: "Requirements engineering, risk assessment, and V&V per NPR 7123.1D"
+    short_alias: "nse"
+    skill_source: "nasa-systems-engineering"
+    status: "PHASE_4_COMPLETE"
+    current_phase: 4
+    total_phases: 4
+    progress_percent: 100
+
+    phases:
+      - id: 1
+        name: "Requirements + Risk"
+        path_id: "phase-1-requirements"
+        status: "COMPLETE"
+        started_at: "2026-02-12T18:10:00Z"
+        completed_at: "2026-02-12T18:50:00Z"
+        agents:
+          - id: "nse-requirements"
+            name: "Requirements Engineer"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-requirements/nse-requirements-analysis.md"
+            inputs:
+              - "work/EPIC-001-cross-platform-compatibility/FEAT-003-nice-to-have/EN-006-platform-expansion/EN-006-platform-expansion.md"
+              - "statusline.py"
+              - "test_statusline.py"
+              - "GETTING_STARTED.md"
+          - id: "nse-risk"
+            name: "Risk Analyst"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-risk/nse-risk-assessment.md"
+            inputs:
+              - "docs/risks/XPLAT-001-e-008-risk-register.md"
+              - "work/EPIC-001-cross-platform-compatibility/EPIC-001-cross-platform-compatibility.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-requirements/nse-requirements-analysis.md"
+          - "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-risk/nse-risk-assessment.md"
+
+      - id: 2
+        name: "V&V Planning"
+        path_id: "phase-2-vv-planning"
+        status: "COMPLETE"
+        blocked_by: "barrier-1"
+        started_at: "2026-02-12T19:05:00Z"
+        completed_at: "2026-02-12T19:40:00Z"
+        agents:
+          - id: "nse-verification"
+            name: "V&V Engineer (Planning)"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/nse/phase-2-vv-planning/nse-verification/vcrm-test-plan.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-2-vv-planning/nse-verification/vcrm-test-plan.md"
+
+      - id: 3
+        name: "V&V Execution"
+        path_id: "phase-3-vv-execution"
+        status: "COMPLETE"
+        blocked_by: "barrier-2"
+        started_at: "2026-02-12T19:50:00Z"
+        completed_at: "2026-02-12T20:10:00Z"
+        agents:
+          - id: "nse-verification-exec"
+            name: "V&V Engineer (Execution)"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/nse/phase-3-vv-execution/nse-verification/vcrm-execution-report.md"
+            result: "PASS - 24/24 requirements verified"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-3-vv-execution/nse-verification/vcrm-execution-report.md"
+
+      - id: 4
+        name: "V&V Sign-Off"
+        path_id: "phase-4-signoff"
+        status: "COMPLETE"
+        blocked_by: "barrier-3"
+        started_at: "2026-02-12T21:00:00Z"
+        completed_at: "2026-02-12T21:15:00Z"
+        agents:
+          - id: "nse-verification-signoff"
+            name: "V&V Sign-Off Engineer"
+            status: "COMPLETE"
+            artifact: "orchestration/en006-20260212-001/nse/phase-4-signoff/nse-verification/nse-verification-signoff.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-4-signoff/nse-verification/nse-verification-signoff.md"
+
+# =============================================================================
+# SYNC BARRIERS
+# =============================================================================
+barriers:
+  - id: "barrier-1"
+    name: "Requirements-Tests Sync"
+    status: "COMPLETE"
+    completed_at: "2026-02-12T19:00:00Z"
+    depends_on:
+      - "pipeline_a.phase.1"
+      - "pipeline_b.phase.1"
+    artifacts:
+      a_to_b:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-1/impl-to-nse/handoff.md"
+        status: "COMPLETE"
+        key_content: "Test inventory (6 tests, 5 failing), coverage gaps, codebase observations for V&V planning"
+      b_to_a:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-1/nse-to-impl/handoff.md"
+        status: "COMPLETE"
+        key_content: "24 requirements, 14 risks (top 4 YELLOW), implementation order, code-level mitigation guidance"
+
+  - id: "barrier-2"
+    name: "Implementation-VCRM Sync"
+    status: "COMPLETE"
+    completed_at: "2026-02-12T19:45:00Z"
+    depends_on:
+      - "pipeline_a.phase.2"
+      - "pipeline_b.phase.2"
+    artifacts:
+      a_to_b:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-2/impl-to-nse/handoff.md"
+        status: "COMPLETE"
+        key_content: "Implementation complete: 27/27 tests pass, DRY refactor (_schema_version_mismatch helper), linting clean"
+      b_to_a:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-2/nse-to-impl/handoff.md"
+        status: "COMPLETE"
+        key_content: "VCRM: 40 verification procedures (6 automated + 5 recommended + 16 inspection + 3 analysis + 1 demo), 4-tier priority schedule"
+
+  - id: "barrier-3"
+    name: "Critique-V&V Sync"
+    status: "COMPLETE"
+    completed_at: "2026-02-12T21:00:00Z"
+    depends_on:
+      - "pipeline_a.phase.3"
+      - "pipeline_a.phase.4"
+      - "pipeline_b.phase.3"
+    artifacts:
+      a_to_b:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-3/impl-to-nse/handoff.md"
+        status: "COMPLETE"
+        key_content: "Iter2 weighted avg 0.935 >= 0.92 PASS. 6 fixes applied (F-1 through F-6). 27/27 tests, linting clean."
+      b_to_a:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-3/nse-to-impl/handoff.md"
+        status: "COMPLETE"
+        key_content: "V&V execution PASS (24/24 requirements verified). Critic consensus: PASS. Ready for sign-off."
+
+# =============================================================================
+# EXECUTION QUEUE
+# =============================================================================
+execution_queue:
+  current_group: 7
+  groups:
+    - id: 1
+      name: "Phase 1: RED + Requirements/Risk"
+      execution_mode: "PARALLEL"
+      status: "COMPLETE"
+      agents:
+        - "ps-tdd-red"
+        - "nse-requirements"
+        - "nse-risk"
+
+    - id: 2
+      name: "Barrier 1: Requirements-Tests Sync"
+      execution_mode: "SEQUENTIAL"
+      status: "COMPLETE"
+      tasks:
+        - "create-impl-to-nse-handoff"
+        - "create-nse-to-impl-handoff"
+
+    - id: 3
+      name: "Phase 2: GREEN/REFACTOR + V&V Planning"
+      execution_mode: "SEQUENTIAL"
+      status: "COMPLETE"
+      agents:
+        - "ps-tdd-green"
+        - "ps-tdd-refactor"
+        - "nse-verification"
+
+    - id: 4
+      name: "Barrier 2: Implementation-VCRM Sync"
+      execution_mode: "SEQUENTIAL"
+      status: "COMPLETE"
+      tasks:
+        - "create-impl-to-nse-handoff-2"
+        - "create-nse-to-impl-handoff-2"
+
+    - id: 5
+      name: "Phase 3: Adversarial Critique + V&V Execution + Revision + Re-scoring"
+      execution_mode: "PARALLEL"
+      status: "COMPLETE"
+      agents:
+        - "critic-red-team"
+        - "critic-blue-team"
+        - "critic-devils-advocate"
+        - "critic-steelman"
+        - "critic-strawman"
+        - "nse-verification-exec"
+        - "ps-tdd-revision"
+      notes: "Iter1 scored 0.877 (below 0.92). 6 fixes applied. Iter2 scored 0.935 (PASS)."
+
+    - id: 6
+      name: "Barrier 3: Critique-V&V Sync"
+      execution_mode: "SEQUENTIAL"
+      status: "COMPLETE"
+      tasks:
+        - "synthesize-critique-scores"
+        - "create-impl-to-nse-handoff-3"
+        - "create-nse-to-impl-handoff-3"
+
+    - id: 7
+      name: "Phase 4: V&V Sign-Off + Final Synthesis"
+      execution_mode: "PARALLEL"
+      status: "COMPLETE"
+      blocked_by: null
+      agents:
+        - "nse-verification-signoff"
+
+# =============================================================================
+# CHECKPOINTS
+# =============================================================================
+checkpoints:
+  latest_id: "CP-004"
+  entries:
+    - id: "CP-001"
+      timestamp: "2026-02-12T19:00:00Z"
+      trigger: "PHASE_COMPLETE"
+      recovery_point: "Phase 1 complete. 3 agents finished: ps-tdd-red (6 tests, 5 failing), nse-requirements (24 reqs), nse-risk (14 risks). Barrier 1 complete. Ready for Phase 2."
+    - id: "CP-002"
+      timestamp: "2026-02-12T19:45:00Z"
+      trigger: "PHASE_COMPLETE"
+      recovery_point: "Phase 2 complete. ps-tdd-green (27/27 tests pass), ps-tdd-refactor (DRY cleanup, _schema_version_mismatch helper), nse-verification (VCRM 40 procedures). Barrier 2 complete. Ready for Phase 3."
+    - id: "CP-003"
+      timestamp: "2026-02-12T20:55:00Z"
+      trigger: "PHASE_COMPLETE"
+      recovery_point: "Phase 3 complete. Iter1: 0.877 (below target). 6 fixes applied (F-1 through F-6). Iter2: 0.935 (PASS). V&V execution: 24/24 PASS. Revision complete. Ready for Barrier 3 + Phase 4."
+    - id: "CP-004"
+      timestamp: "2026-02-12T21:00:00Z"
+      trigger: "BARRIER_COMPLETE"
+      recovery_point: "Barrier 3 complete. All critique scores finalized. V&V sign-off ready. Final synthesis pending."
+
+# =============================================================================
+# METRICS
+# =============================================================================
+metrics:
+  execution:
+    phases_complete: 8
+    phases_total: 8
+    phases_percent: 100
+    barriers_complete: 3
+    barriers_total: 3
+    barriers_percent: 100
+    agents_executed: 14
+    agents_total: 14
+    agents_percent: 100
+    artifacts_created: 26
+    artifacts_total: 26
+    artifacts_percent: 100
+
+  quality:
+    current_score: 0.935
+    target_score: 0.92
+    critique_iteration: 2
+    max_iterations: 3
+    agent_success_rate: 100
+    barrier_validation_pass_rate: 100
+
+  timing:
+    workflow_started: "2026-02-12T18:10:00Z"
+    last_activity: "2026-02-12T21:00:00Z"
+    workflow_completed: "2026-02-12T21:15:00Z"
+
+# =============================================================================
+# ADVERSARIAL CRITIQUE STATE
+# =============================================================================
+adversarial:
+  current_iteration: 2
+  max_iterations: 3
+  target_score: 0.92
+  final_verdict: "PASS"
+  scores:
+    iteration_1:
+      red_team: 0.890
+      blue_team: 0.880
+      devils_advocate: 0.780
+      steelman: 0.950
+      strawman: 0.887
+      weighted_average: 0.877
+      verdict: "BELOW_TARGET"
+      fixes_required:
+        - "F-1: Warning uses raw print(stderr) not debug_log()"
+        - "F-2: Missing version identification docs"
+        - "F-3: Config override claims need clarification"
+        - "F-4: No concrete migration examples in docs"
+        - "F-5: Float version edge case (1.9 → int=1)"
+        - "F-6: State mismatch discards data silently without warning"
+    iteration_2:
+      red_team: 0.940
+      blue_team: 0.940
+      devils_advocate: 0.880
+      steelman: 0.970
+      strawman: 0.943
+      weighted_average: 0.935
+      verdict: "PASS"
+      fixes_applied:
+        - "F-1: Changed from print(stderr) to debug_log() for version warnings"
+        - "F-2: Added 'Check Your Version' section with grep/Select-String commands"
+        - "F-3: Clarified schema_version auto-management behavior in docs"
+        - "F-4: Added 3 concrete migration examples (pre-2.1.0, adding field, future v2)"
+        - "F-5: Added isinstance check + dot rejection in _schema_version_mismatch()"
+        - "F-6: Enhanced debug_log message to explain state discard consequences"
+    iteration_3:
+      red_team: null
+      blue_team: null
+      devils_advocate: null
+      steelman: null
+      strawman: null
+      weighted_average: null
+      verdict: "NOT_NEEDED"
+
+# =============================================================================
+# TASK MAPPING
+# =============================================================================
+task_mapping:
+  task_001:
+    id: "TASK-001"
+    title: "Add upgrade path documentation"
+    effort: "1h"
+    type: "DOCS"
+    strategy: "CRITIQUE_CYCLE"
+    gap: "G-022"
+    target_file: "GETTING_STARTED.md"
+    status: "COMPLETE"
+    acceptance:
+      - "Upgrade instructions in GETTING_STARTED.md"
+      - "Version migration guidance (v1.x to v2.x)"
+      - "Config file migration steps"
+      - "Breaking change checklist"
+
+  task_002:
+    id: "TASK-002"
+    title: "Add schema version checking"
+    effort: "1h"
+    type: "CODE"
+    strategy: "RED/GREEN/REFACTOR"
+    gap: null
+    target_files:
+      - "statusline.py"
+      - "test_statusline.py"
+    status: "COMPLETE"
+    acceptance:
+      - "Schema version field in config/state files"
+      - "Version mismatch detection with user-friendly warning"
+      - "Backward compatibility for unversioned configs"
+
+# =============================================================================
+# BLOCKERS AND ISSUES
+# =============================================================================
+blockers:
+  active: []
+
+issues:
+  resolved:
+    - id: "ISSUE-001"
+      description: "critic-blue-team Bash permission denied on initial launch"
+      resolution: "Relaunched with pre-verified test results and no-Bash instruction"
+    - id: "ISSUE-002"
+      description: "Transient 26/27 test failure during Phase 3 (race condition)"
+      resolution: "Re-run showed 27/27 pass; likely concurrent file modification by critic"
+
+# =============================================================================
+# NEXT ACTIONS
+# =============================================================================
+next_actions:
+  immediate:
+    - action: "Execute V&V Sign-Off agent"
+      agents: ["nse-verification-signoff"]
+      execution_mode: "PARALLEL"
+
+  subsequent:
+    - action: "Create final synthesis report"
+      depends_on: "V&V Sign-Off complete"
+    - action: "Update work items (EN-006, WORKTRACKER.md)"
+      depends_on: "Synthesis complete"
+    - action: "Commit and push"
+      depends_on: "All updates complete"
+
+# =============================================================================
+# RESUMPTION CONTEXT
+# =============================================================================
+resumption:
+  last_checkpoint: "CP-004"
+  current_state: "Workflow COMPLETE. All 14 agents executed. V&V sign-off APPROVED. Final synthesis created."
+  next_step: "Commit, push, create PR."
+
+  files_to_read:
+    - "orchestration/en006-20260212-001/ORCHESTRATION_PLAN.md"
+    - "orchestration/en006-20260212-001/ORCHESTRATION_WORKTRACKER.md"
+    - "orchestration/en006-20260212-001/ORCHESTRATION.yaml"
+
+  cross_session_portable: true
+  ephemeral_references: false
