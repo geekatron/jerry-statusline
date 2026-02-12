@@ -22,6 +22,7 @@ A step-by-step guide to installing and configuring ECW Status Line for Claude Co
 11. [SSH and tmux](#ssh-and-tmux)
 12. [Troubleshooting](#troubleshooting)
 13. [Uninstallation](#uninstallation)
+14. [Upgrading](#upgrading)
 
 ---
 
@@ -1129,6 +1130,160 @@ notepad "$env:USERPROFILE\.claude\settings.json"
 
 # Restart Claude Code
 ```
+
+---
+
+## Upgrading
+
+ECW Status Line follows a simple versioning scheme. Upgrading is straightforward since it is a single-file deployment.
+
+### Version History
+
+| Schema Version | Script Version | Changes |
+|----------------|---------------|---------|
+| 1 | 2.1.0 | Added schema version checking, upgrade documentation, compaction detection, atomic state writes |
+| (none) | 2.0.0 | Initial release with 8 segments, color-coded thresholds, configurable currency |
+
+### Check Your Version
+
+Before upgrading, check which version you currently have installed:
+
+#### macOS / Linux
+
+```bash
+grep __version__ ~/.claude/statusline.py | head -1
+```
+
+**Expected output:**
+```
+__version__ = "2.1.0"
+```
+
+Alternatively, view the first few lines of the script:
+
+```bash
+head -7 ~/.claude/statusline.py
+```
+
+#### Windows
+
+```powershell
+Select-String -Path "$env:USERPROFILE\.claude\statusline.py" -Pattern "__version__" | Select-Object -First 1
+```
+
+**Expected output:**
+```
+__version__ = "2.1.0"
+```
+
+### Upgrade Command
+
+To upgrade, replace the script file with the latest version:
+
+#### macOS / Linux
+
+```bash
+curl -o ~/.claude/statusline.py https://raw.githubusercontent.com/geekatron/ecw-statusline/main/statusline.py
+chmod +x ~/.claude/statusline.py
+```
+
+#### Windows
+
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/geekatron/ecw-statusline/main/statusline.py" -OutFile "$env:USERPROFILE\.claude\statusline.py"
+```
+
+Then restart Claude Code (`/exit` and `claude`).
+
+### Config File Migration
+
+Your existing configuration file (`ecw-statusline-config.json`) is **forward-compatible**. When upgrading:
+
+- **No changes required**: Old config files without a `schema_version` field load without errors or warnings.
+- **New fields use defaults**: Any new configuration options added in newer versions automatically use their default values.
+- **Version mismatch warning**: If your config specifies an outdated `schema_version`, a debug-level warning is logged (visible only with `ECW_DEBUG=1`). The script continues to work normally.
+
+#### Example 1: Pre-2.1.0 config (no schema_version)
+
+**Before (pre-2.1.0 config):**
+```json
+{
+  "cost": {
+    "currency_symbol": "CAD "
+  }
+}
+```
+
+**After upgrading to 2.1.0+:** No changes needed. The script detects the missing `schema_version` and silently treats your config as compatible. All existing settings are preserved.
+
+#### Example 2: Adding schema_version (optional)
+
+If you want to be explicit, you can add the `schema_version` field:
+
+```json
+{
+  "schema_version": "1",
+  "cost": {
+    "currency_symbol": "CAD "
+  }
+}
+```
+
+This is purely informational -- the script ignores this value and uses its own built-in version.
+
+#### Example 3: Future version migration (hypothetical)
+
+When a future version introduces new config options (e.g., schema version "2"), your existing v1 config continues to work:
+
+**Your existing config (v1):**
+```json
+{
+  "cost": {
+    "currency_symbol": "CAD "
+  },
+  "display": {
+    "compact_mode": true
+  }
+}
+```
+
+**New defaults added by v2 (handled automatically):**
+```json
+{
+  "schema_version": "2",
+  "cost": {
+    "currency_symbol": "CAD "
+  },
+  "display": {
+    "compact_mode": true,
+    "new_feature_option": true
+  },
+  "new_section": {
+    "option_a": "default_value"
+  }
+}
+```
+
+You do not need to add the new fields manually. The script merges your existing settings with the new defaults, so `new_feature_option` and `new_section` automatically use their default values.
+
+> **Note:** Adding `schema_version` to your config is optional and has no effect on script behavior. The `schema_version` field is **internal metadata** automatically managed by the script. During config loading, any user-supplied `schema_version` value is checked for compatibility, then replaced with the script's built-in version. This means `schema_version` cannot be overridden by user configuration -- it is always auto-restored to the script's expected value after the config merge.
+
+### State File Notes
+
+The state file (`~/.claude/ecw-statusline-state.json`) tracks compaction detection data between invocations.
+
+- **Safe to delete**: The state file is automatically recreated on the next run. Deleting it only resets compaction history.
+- **Auto-recreated**: If the state file is missing, corrupt, or from an incompatible version, the script falls back to defaults and creates a fresh state file.
+- **Version mismatch**: If the state file has a different `schema_version` than the script expects, the script discards the old data and starts fresh. This prevents interpreting incompatible data.
+
+### Breaking Change Checklist (Major Versions)
+
+When upgrading across major versions:
+
+1. Check the Version History table above for breaking changes
+2. Review your `ecw-statusline-config.json` for any deprecated options
+3. Delete the state file if instructed: `rm ~/.claude/ecw-statusline-state.json`
+4. Restart Claude Code after upgrading
 
 ---
 

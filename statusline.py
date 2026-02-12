@@ -60,6 +60,8 @@ _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 # =============================================================================
 
 DEFAULT_CONFIG: Dict[str, Any] = {
+    # Schema version for config/state compatibility checking
+    "schema_version": "1",
     # Display settings
     "display": {
         "compact_mode": False,
@@ -181,6 +183,30 @@ CONFIG_PATHS = _get_config_paths()
 _transcript_cache: Dict[str, Tuple[float, Dict[str, int]]] = {}
 
 
+def _schema_version_mismatch(found_version: Any) -> bool:
+    """Check whether a found schema version differs from the expected version.
+
+    Returns True if versions mismatch or the found version is unparseable.
+    Returns False if they match (integer comparison).
+
+    Non-string types (int, float, list, etc.) are treated as mismatches to
+    enforce strict type discipline. Float values like 1.9 would be silently
+    truncated by int(), so they are rejected explicitly.
+    """
+    expected = DEFAULT_CONFIG["schema_version"]
+    # Reject non-string types (floats would silently truncate, e.g. int(1.9) = 1)
+    if not isinstance(found_version, str):
+        return True
+    # Reject strings containing "." to prevent float-like version strings
+    found_stripped = found_version.strip()
+    if "." in found_stripped:
+        return True
+    try:
+        return int(found_stripped) != int(expected)
+    except (ValueError, TypeError):
+        return True
+
+
 def load_config() -> Dict[str, Any]:
     """Load configuration from embedded defaults with optional file override."""
     config = deep_copy(DEFAULT_CONFIG)
@@ -190,7 +216,19 @@ def load_config() -> Dict[str, Any]:
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
                     user_config = json.load(f)
+                # Check for schema version mismatch before merging
+                user_schema_version = user_config.get("schema_version")
+                if user_schema_version is not None and _schema_version_mismatch(
+                    user_schema_version
+                ):
+                    debug_log(
+                        f"Config schema version mismatch: "
+                        f"found {user_schema_version}, "
+                        f"expected {DEFAULT_CONFIG['schema_version']}"
+                    )
                 config = deep_merge(config, user_config)
+                # Restore schema_version from DEFAULT_CONFIG (not user-overridable)
+                config["schema_version"] = DEFAULT_CONFIG["schema_version"]
                 debug_log(f"Loaded config from {config_path}")
                 break
             except (json.JSONDecodeError, IOError) as e:
@@ -274,7 +312,21 @@ def load_state(config: Dict) -> Dict[str, Any]:
     try:
         if state_file.exists():
             with open(state_file, "r", encoding="utf-8") as f:
-                return json.load(f)
+                loaded = json.load(f)
+            # Check schema version - fall back to defaults on mismatch
+            loaded_version = loaded.get("schema_version")
+            if loaded_version is not None and _schema_version_mismatch(
+                loaded_version
+            ):
+                debug_log(
+                    f"State schema version mismatch: "
+                    f"found {loaded_version}, "
+                    f"expected {DEFAULT_CONFIG['schema_version']}. "
+                    f"Discarding previous state data (compaction history "
+                    f"will be reset) and falling back to defaults."
+                )
+                return default
+            return loaded
     except (json.JSONDecodeError, OSError) as e:
         debug_log(f"State load error: {e}")
 
@@ -295,6 +347,8 @@ def save_state(config: Dict, state: Dict[str, Any]) -> None:
         return
 
     try:
+        # Ensure schema_version is always written to state file
+        state["schema_version"] = DEFAULT_CONFIG["schema_version"]
         state_file.parent.mkdir(parents=True, exist_ok=True)
         # Atomic write: write to temp file in same directory, then rename
         fd = tempfile.NamedTemporaryFile(

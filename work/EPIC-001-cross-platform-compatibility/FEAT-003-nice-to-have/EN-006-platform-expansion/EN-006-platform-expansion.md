@@ -1,13 +1,13 @@
 # EN-006: Platform Expansion
 
 > **Type:** enabler
-> **Status:** pending
+> **Status:** completed
 > **Priority:** low
 > **Impact:** low
 > **Enabler Type:** exploration
 > **Created:** 2026-02-03T00:00:00Z
 > **Due:** -
-> **Completed:** -
+> **Completed:** 2026-02-12
 > **Parent:** FEAT-003
 > **Owner:** -
 > **Effort:** 2h
@@ -32,17 +32,17 @@ Improve upgrade experience and forward compatibility for the status line script.
 
 | ID | Title | Status | Effort |
 |----|-------|--------|--------|
-| TASK-001 | Add upgrade path documentation | pending | 1h |
-| TASK-002 | Add schema version checking | pending | 1h |
+| TASK-001 | Add upgrade path documentation | completed | 1h |
+| TASK-002 | Add schema version checking | completed | 1h |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] Upgrade instructions in GETTING_STARTED.md
-- [ ] Schema version field in config/state files
-- [ ] Version mismatch detection with user-friendly warning
-- [ ] Backward compatibility for unversioned configs
+- [x] Upgrade instructions in GETTING_STARTED.md
+- [x] Schema version field in config/state files
+- [x] Version mismatch detection with user-friendly warning
+- [x] Backward compatibility for unversioned configs
 
 ---
 
@@ -60,5 +60,6 @@ Improve upgrade experience and forward compatibility for the status line script.
 |------|--------|--------|-------|
 | 2026-02-03 | Claude | pending | Enabler created |
 | 2026-02-12 | Claude | pending | Scope narrowed: hardware testing tasks (TASK-001/002/003) split to EN-009. Effort reduced 8h → 2h. Tasks renumbered. |
+| 2026-02-12 | Claude | completed | Completed via orchestrated workflow (en006-20260212-001). Dual-pipeline with adversarial critique (2 iterations, final score 0.935). V&V sign-off PASS. 27/27 tests. |
 
 ---
