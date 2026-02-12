@@ -1,7 +1,7 @@
 # EN-003: Code Hardening
 
 > **Type:** enabler
-> **Status:** done
+> **Status:** completed
 > **Priority:** high
 > **Impact:** high
 > **Enabler Type:** architecture
@@ -32,10 +32,10 @@ Harden statusline.py code for edge cases identified in cross-platform analysis.
 
 | ID | Title | Status | Effort |
 |----|-------|--------|--------|
-| TASK-001 | Add subprocess encoding parameter | done | 2h |
-| TASK-002 | Handle missing HOME variable | done (EN-002) | 1h |
-| TASK-003 | Complete ASCII emoji fallback | done | 2h |
-| TASK-004 | Test VS Code terminal compatibility | done | 2h |
+| TASK-001 | Add subprocess encoding parameter | completed | 2h |
+| TASK-002 | Handle missing HOME variable | completed (EN-002) | 1h |
+| TASK-003 | Complete ASCII emoji fallback | completed | 2h |
+| TASK-004 | Test VS Code terminal compatibility | completed | 2h |
 
 ---
 
@@ -64,6 +64,6 @@ Harden statusline.py code for edge cases identified in cross-platform analysis.
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-03 | Claude | pending | Enabler created |
-| 2026-02-11 | Claude | done | All tasks completed via FEAT-002 orchestration |
+| 2026-02-11 | Claude | completed | All tasks completed via FEAT-002 orchestration |
 
 ---

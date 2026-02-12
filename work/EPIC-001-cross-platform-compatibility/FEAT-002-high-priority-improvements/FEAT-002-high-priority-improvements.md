@@ -1,7 +1,7 @@
 # FEAT-002: High-Priority Improvements (Phase 2)
 
 > **Type:** feature
-> **Status:** done
+> **Status:** completed
 > **Priority:** high
 > **Impact:** high
 > **Created:** 2026-02-03T00:00:00Z
@@ -44,8 +44,8 @@ Implement high-priority improvements that should be completed before GA release.
 
 | ID | Type | Title | Status | Priority | Effort |
 |----|------|-------|--------|----------|--------|
-| [EN-003](EN-003-code-hardening/EN-003-code-hardening.md) | architecture | Code Hardening | done | high | 7h |
-| [EN-004](EN-004-documentation/EN-004-documentation.md) | compliance | Documentation Completion | done | high | 11h |
+| [EN-003](EN-003-code-hardening/EN-003-code-hardening.md) | architecture | Code Hardening | completed | high | 7h |
+| [EN-004](EN-004-documentation/EN-004-documentation.md) | compliance | Documentation Completion | completed | high | 11h |
 
 ### Enabler Links
 
@@ -96,6 +96,6 @@ Implement high-priority improvements that should be completed before GA release.
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-03 | Claude | pending | Feature created from XPLAT-001 Phase 2 |
-| 2026-02-11 | Claude | done | Completed via orchestrated workflow (feat002-20260211-001) with adversarial critique |
+| 2026-02-11 | Claude | completed | Completed via orchestrated workflow (feat002-20260211-001) with adversarial critique |
 
 ---

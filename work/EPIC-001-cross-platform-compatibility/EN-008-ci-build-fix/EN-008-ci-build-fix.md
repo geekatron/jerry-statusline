@@ -1,7 +1,7 @@
 # EN-008: CI Build Fix (Windows Regression)
 
 > **Type:** enabler
-> **Status:** done
+> **Status:** completed
 > **Priority:** critical
 > **Impact:** high
 > **Created:** 2026-02-11T16:00:00Z
@@ -29,8 +29,8 @@ Fix two Windows-specific CI build failures introduced during FEAT-002 implementa
 
 | ID | Title | Status | Priority | Effort |
 |----|-------|--------|----------|--------|
-| [BUG-001](BUG-001-debug-log-nameerror.md) | debug_log NameError on Windows CI | done | critical | 0.25h |
-| [BUG-002](BUG-002-windows-rmdir-failure.md) | os.rmdir fails on Windows temp dir cleanup | done | critical | 0.25h |
+| [BUG-001](BUG-001-debug-log-nameerror.md) | debug_log NameError on Windows CI | completed | critical | 0.25h |
+| [BUG-002](BUG-002-windows-rmdir-failure.md) | os.rmdir fails on Windows temp dir cleanup | completed | critical | 0.25h |
 
 ---
 
@@ -63,6 +63,6 @@ Fix two Windows-specific CI build failures introduced during FEAT-002 implementa
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-11 | Claude | in_progress | Created from CI failure analysis. 2 bugs identified from push run 21912030014. |
-| 2026-02-11 | Claude | done | Both bugs fixed. 17/17 tests pass, ruff clean. Pending CI verification after push. |
+| 2026-02-11 | Claude | completed | Both bugs fixed. 17/17 tests pass, ruff clean. Pending CI verification after push. |
 
 ---

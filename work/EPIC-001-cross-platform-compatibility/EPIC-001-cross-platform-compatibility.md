@@ -65,7 +65,7 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 
 | ID | Title | Status | Priority | Effort | Progress |
 |----|-------|--------|----------|--------|----------|
-| [EN-008](EN-008-ci-build-fix/EN-008-ci-build-fix.md) | CI Build Fix (Windows Regression) | done | critical | 1h | 100% |
+| [EN-008](EN-008-ci-build-fix/EN-008-ci-build-fix.md) | CI Build Fix (Windows Regression) | completed | critical | 1h | 100% |
 
 ### Feature Links
 
@@ -112,7 +112,7 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 |-----------|-------------|--------|-------|
 | CI/CD Live | 2026-02-10 | completed | EN-001 delivered 2026-02-03 |
 | Tests Complete | 2026-02-14 | completed | EN-002 completed 2026-02-10 |
-| GA Ready | 2026-02-21 | in_progress | Phase 2 complete (FEAT-002 done). FEAT-003 remaining. |
+| GA Ready | 2026-02-21 | in_progress | Phase 2 complete (FEAT-002 completed). FEAT-003 remaining. |
 
 ---
 
@@ -146,7 +146,7 @@ Enable jerry-statusline (ECW Status Line v2.1.0) to work reliably on macOS, Linu
 | 2026-02-03 | Claude | in_progress | EN-001 CI/CD Pipeline completed, EN-007 Security Audit completed |
 | 2026-02-10 | Claude | in_progress | Worktracker remediation - status/progress updated to reflect reality (22% overall) |
 | 2026-02-10 | Claude | in_progress | EN-002 completed, FEAT-001 completed. Progress: 22% → 39%. Risks RSK-001, RSK-003 mitigated. |
-| 2026-02-11 | Claude | in_progress | FEAT-002 completed via orchestrated workflow (feat002-20260211-001). EN-003 + EN-004 done. Adversarial critique (5 roles, 2 iterations). Progress: 39% → 69%. RSK-009 mitigated. |
+| 2026-02-11 | Claude | in_progress | FEAT-002 completed via orchestrated workflow (feat002-20260211-001). EN-003 + EN-004 completed. Adversarial critique (5 roles, 2 iterations). Progress: 39% → 69%. RSK-009 mitigated. |
 | 2026-02-11 | Claude | in_progress | EN-008 CI build fix: 2 Windows regression bugs (BUG-001 NameError, BUG-002 rmdir). Progress: 69% → 71%. |
 
 ---
