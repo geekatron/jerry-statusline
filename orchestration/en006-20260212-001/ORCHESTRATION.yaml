@@ -1,0 +1,538 @@
+# ORCHESTRATION.yaml
+# Machine-readable orchestration state for EN-006
+# Document ID: EN006-ORCH-STATE
+# Version: 1.0
+# Last Updated: 2026-02-12T18:00:00Z
+
+schema_version: "2.0.0"
+
+# =============================================================================
+# WORKFLOW METADATA
+# =============================================================================
+workflow:
+  id: "en006-20260212-001"
+  name: "EN-006 Platform Expansion"
+  project_id: "jerry-statusline"
+  version: "1.0"
+  created_at: "2026-02-12T18:00:00Z"
+  updated_at: "2026-02-12T18:00:00Z"
+  status: "ACTIVE"
+  id_source: "auto"
+  id_format: "semantic-date-seq"
+
+  patterns:
+    - SEQUENTIAL
+    - CONCURRENT
+    - BARRIER_SYNC
+    - FAN_OUT
+    - RED_GREEN_REFACTOR
+
+  constraints:
+    max_agent_nesting: 1
+    file_persistence: true
+    user_authority: true
+    max_concurrent_agents: 5
+    max_barrier_retries: 2
+    max_adversarial_iterations: 3
+    target_quality_score: 0.92
+    checkpoint_frequency: "PHASE"
+
+  quality_rubric:
+    correctness: 0.25
+    completeness: 0.20
+    robustness: 0.25
+    maintainability: 0.15
+    documentation: 0.15
+
+# =============================================================================
+# PATH CONFIGURATION
+# =============================================================================
+paths:
+  base: "orchestration/en006-20260212-001/"
+  pipeline: "{base}{pipeline_alias}/{phase_id}/{agent_id}/"
+  barrier: "{base}cross-pollination/{barrier_id}/{direction}/"
+
+# =============================================================================
+# PIPELINE DEFINITIONS
+# =============================================================================
+pipelines:
+  pipeline_a:
+    id: "pipeline-a"
+    name: "Implementation Pipeline"
+    description: "RED/GREEN/REFACTOR test-driven development with adversarial critique"
+    short_alias: "impl"
+    skill_source: "problem-solving"
+    status: "PHASE_1_PENDING"
+    current_phase: 1
+    total_phases: 4
+    progress_percent: 0
+
+    phases:
+      - id: 1
+        name: "RED (Write Failing Tests)"
+        path_id: "phase-1-red"
+        status: "PENDING"
+        started_at: null
+        completed_at: null
+        agents:
+          - id: "ps-tdd-red"
+            name: "TDD Red Phase (Write Failing Tests)"
+            status: "PENDING"
+            artifact: "orchestration/en006-20260212-001/impl/phase-1-red/ps-tdd-red/ps-tdd-red-tests.md"
+            inputs:
+              - "work/EPIC-001-cross-platform-compatibility/FEAT-003-nice-to-have/EN-006-platform-expansion/EN-006-platform-expansion.md"
+              - "statusline.py"
+              - "test_statusline.py"
+              - "GETTING_STARTED.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-1-red/ps-tdd-red/ps-tdd-red-tests.md"
+
+      - id: 2
+        name: "GREEN + REFACTOR"
+        path_id: "phase-2-green-refactor"
+        status: "BLOCKED"
+        blocked_by: "barrier-1"
+        started_at: null
+        completed_at: null
+        agents:
+          - id: "ps-tdd-green"
+            name: "TDD Green Phase (Make Tests Pass)"
+            status: "BLOCKED"
+            artifact: "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-green/ps-tdd-green-implementation.md"
+            inputs:
+              - "test_statusline.py"
+              - "statusline.py"
+              - "GETTING_STARTED.md"
+          - id: "ps-tdd-refactor"
+            name: "TDD Refactor Phase (Clean Up Code)"
+            status: "BLOCKED"
+            artifact: "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-refactor/ps-tdd-refactor-cleanup.md"
+            inputs:
+              - "statusline.py"
+              - "test_statusline.py"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-green/ps-tdd-green-implementation.md"
+          - "orchestration/en006-20260212-001/impl/phase-2-green-refactor/ps-tdd-refactor/ps-tdd-refactor-cleanup.md"
+
+      - id: 3
+        name: "Adversarial Critique"
+        path_id: "phase-3-critique"
+        status: "BLOCKED"
+        blocked_by: "barrier-2"
+        started_at: null
+        completed_at: null
+        iteration: 0
+        max_iterations: 3
+        agents:
+          - id: "critic-red-team"
+            name: "Red Team Critic"
+            status: "BLOCKED"
+            score: null
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-red-team/critic-red-team-review.md"
+          - id: "critic-blue-team"
+            name: "Blue Team Critic"
+            status: "BLOCKED"
+            score: null
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-blue-team/critic-blue-team-review.md"
+          - id: "critic-devils-advocate"
+            name: "Devil's Advocate Critic"
+            status: "BLOCKED"
+            score: null
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-devils-advocate/critic-devils-advocate-review.md"
+          - id: "critic-steelman"
+            name: "Steelman Critic"
+            status: "BLOCKED"
+            score: null
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-steelman/critic-steelman-review.md"
+          - id: "critic-strawman"
+            name: "Strawman Critic"
+            status: "BLOCKED"
+            score: null
+            artifact: "orchestration/en006-20260212-001/impl/phase-3-critique/critic-strawman/critic-strawman-review.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-red-team/critic-red-team-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-blue-team/critic-blue-team-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-devils-advocate/critic-devils-advocate-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-steelman/critic-steelman-review.md"
+          - "orchestration/en006-20260212-001/impl/phase-3-critique/critic-strawman/critic-strawman-review.md"
+
+      - id: 4
+        name: "Final Revision"
+        path_id: "phase-4-revision"
+        status: "BLOCKED"
+        blocked_by: "barrier-3"
+        started_at: null
+        completed_at: null
+        agents:
+          - id: "ps-tdd-revision"
+            name: "TDD Revision Phase"
+            status: "BLOCKED"
+            artifact: "orchestration/en006-20260212-001/impl/phase-4-revision/ps-tdd-revision/ps-tdd-revision-fixes.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/impl/phase-4-revision/ps-tdd-revision/ps-tdd-revision-fixes.md"
+
+  pipeline_b:
+    id: "pipeline-b"
+    name: "NASA-SE Pipeline"
+    description: "Requirements engineering, risk assessment, and V&V per NPR 7123.1D"
+    short_alias: "nse"
+    skill_source: "nasa-systems-engineering"
+    status: "PHASE_1_PENDING"
+    current_phase: 1
+    total_phases: 4
+    progress_percent: 0
+
+    phases:
+      - id: 1
+        name: "Requirements + Risk"
+        path_id: "phase-1-requirements"
+        status: "PENDING"
+        started_at: null
+        completed_at: null
+        agents:
+          - id: "nse-requirements"
+            name: "Requirements Engineer"
+            status: "PENDING"
+            artifact: "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-requirements/nse-requirements-analysis.md"
+            inputs:
+              - "work/EPIC-001-cross-platform-compatibility/FEAT-003-nice-to-have/EN-006-platform-expansion/EN-006-platform-expansion.md"
+              - "statusline.py"
+              - "test_statusline.py"
+              - "GETTING_STARTED.md"
+          - id: "nse-risk"
+            name: "Risk Analyst"
+            status: "PENDING"
+            artifact: "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-risk/nse-risk-assessment.md"
+            inputs:
+              - "docs/risks/XPLAT-001-e-008-risk-register.md"
+              - "work/EPIC-001-cross-platform-compatibility/EPIC-001-cross-platform-compatibility.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-requirements/nse-requirements-analysis.md"
+          - "orchestration/en006-20260212-001/nse/phase-1-requirements/nse-risk/nse-risk-assessment.md"
+
+      - id: 2
+        name: "V&V Planning"
+        path_id: "phase-2-vv-planning"
+        status: "BLOCKED"
+        blocked_by: "barrier-1"
+        started_at: null
+        completed_at: null
+        agents:
+          - id: "nse-verification"
+            name: "V&V Engineer (Planning)"
+            status: "BLOCKED"
+            artifact: "orchestration/en006-20260212-001/nse/phase-2-vv-planning/nse-verification/vcrm-test-plan.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-2-vv-planning/nse-verification/vcrm-test-plan.md"
+
+      - id: 3
+        name: "V&V Execution"
+        path_id: "phase-3-vv-execution"
+        status: "BLOCKED"
+        blocked_by: "barrier-2"
+        started_at: null
+        completed_at: null
+        agents:
+          - id: "nse-verification-exec"
+            name: "V&V Engineer (Execution)"
+            status: "BLOCKED"
+            artifact: "orchestration/en006-20260212-001/nse/phase-3-vv-execution/nse-verification/vcrm-execution-report.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-3-vv-execution/nse-verification/vcrm-execution-report.md"
+
+      - id: 4
+        name: "V&V Sign-Off"
+        path_id: "phase-4-signoff"
+        status: "BLOCKED"
+        blocked_by: "barrier-3"
+        started_at: null
+        completed_at: null
+        agents:
+          - id: "nse-verification-signoff"
+            name: "V&V Sign-Off Engineer"
+            status: "BLOCKED"
+            artifact: "orchestration/en006-20260212-001/nse/phase-4-signoff/nse-verification/nse-verification-signoff.md"
+        artifacts:
+          - "orchestration/en006-20260212-001/nse/phase-4-signoff/nse-verification/nse-verification-signoff.md"
+
+# =============================================================================
+# SYNC BARRIERS
+# =============================================================================
+barriers:
+  - id: "barrier-1"
+    name: "Requirements-Tests Sync"
+    status: "PENDING"
+    completed_at: null
+    depends_on:
+      - "pipeline_a.phase.1"
+      - "pipeline_b.phase.1"
+    artifacts:
+      a_to_b:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-1/impl-to-nse/handoff.md"
+        status: "PENDING"
+        key_content: null
+      b_to_a:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-1/nse-to-impl/handoff.md"
+        status: "PENDING"
+        key_content: null
+
+  - id: "barrier-2"
+    name: "Implementation-VCRM Sync"
+    status: "PENDING"
+    completed_at: null
+    depends_on:
+      - "pipeline_a.phase.2"
+      - "pipeline_b.phase.2"
+    artifacts:
+      a_to_b:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-2/impl-to-nse/handoff.md"
+        status: "PENDING"
+        key_content: null
+      b_to_a:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-2/nse-to-impl/handoff.md"
+        status: "PENDING"
+        key_content: null
+
+  - id: "barrier-3"
+    name: "Critique-V&V Sync"
+    status: "PENDING"
+    completed_at: null
+    depends_on:
+      - "pipeline_a.phase.3"
+      - "pipeline_b.phase.3"
+    artifacts:
+      a_to_b:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-3/impl-to-nse/handoff.md"
+        status: "PENDING"
+        key_content: null
+      b_to_a:
+        path: "orchestration/en006-20260212-001/cross-pollination/barrier-3/nse-to-impl/handoff.md"
+        status: "PENDING"
+        key_content: null
+
+# =============================================================================
+# EXECUTION QUEUE
+# =============================================================================
+execution_queue:
+  current_group: 1
+  groups:
+    - id: 1
+      name: "Phase 1: RED + Requirements/Risk"
+      execution_mode: "PARALLEL"
+      status: "READY"
+      agents:
+        - "ps-tdd-red"
+        - "nse-requirements"
+        - "nse-risk"
+
+    - id: 2
+      name: "Barrier 1: Requirements-Tests Sync"
+      execution_mode: "SEQUENTIAL"
+      status: "BLOCKED"
+      blocked_by: "group-1"
+      tasks:
+        - "create-impl-to-nse-handoff"
+        - "create-nse-to-impl-handoff"
+
+    - id: 3
+      name: "Phase 2: GREEN/REFACTOR + V&V Planning"
+      execution_mode: "SEQUENTIAL"
+      status: "BLOCKED"
+      blocked_by: "group-2"
+      agents:
+        - "ps-tdd-green"
+        - "ps-tdd-refactor"
+        - "nse-verification"
+
+    - id: 4
+      name: "Barrier 2: Implementation-VCRM Sync"
+      execution_mode: "SEQUENTIAL"
+      status: "BLOCKED"
+      blocked_by: "group-3"
+      tasks:
+        - "create-impl-to-nse-handoff-2"
+        - "create-nse-to-impl-handoff-2"
+
+    - id: 5
+      name: "Phase 3: Adversarial Critique + V&V Execution"
+      execution_mode: "PARALLEL"
+      status: "BLOCKED"
+      blocked_by: "group-4"
+      agents:
+        - "critic-red-team"
+        - "critic-blue-team"
+        - "critic-devils-advocate"
+        - "critic-steelman"
+        - "critic-strawman"
+        - "nse-verification-exec"
+
+    - id: 6
+      name: "Barrier 3: Critique-V&V Sync"
+      execution_mode: "SEQUENTIAL"
+      status: "BLOCKED"
+      blocked_by: "group-5"
+      tasks:
+        - "synthesize-critique-scores"
+        - "create-impl-to-nse-handoff-3"
+        - "create-nse-to-impl-handoff-3"
+
+    - id: 7
+      name: "Phase 4: Final Revision + V&V Sign-Off"
+      execution_mode: "PARALLEL"
+      status: "BLOCKED"
+      blocked_by: "group-6"
+      agents:
+        - "ps-tdd-revision"
+        - "nse-verification-signoff"
+
+# =============================================================================
+# CHECKPOINTS
+# =============================================================================
+checkpoints:
+  latest_id: null
+  entries: []
+
+# =============================================================================
+# METRICS
+# =============================================================================
+metrics:
+  execution:
+    phases_complete: 0
+    phases_total: 8
+    phases_percent: 0
+    barriers_complete: 0
+    barriers_total: 3
+    barriers_percent: 0
+    agents_executed: 0
+    agents_total: 14
+    agents_percent: 0
+    artifacts_created: 0
+    artifacts_total: 20
+    artifacts_percent: 0
+
+  quality:
+    current_score: null
+    target_score: 0.92
+    critique_iteration: 0
+    max_iterations: 3
+    agent_success_rate: 0
+    barrier_validation_pass_rate: 0
+
+  timing:
+    workflow_started: null
+    last_activity: null
+    workflow_completed: null
+
+# =============================================================================
+# ADVERSARIAL CRITIQUE STATE
+# =============================================================================
+adversarial:
+  current_iteration: 0
+  max_iterations: 3
+  target_score: 0.92
+  scores:
+    iteration_1:
+      red_team: null
+      blue_team: null
+      devils_advocate: null
+      steelman: null
+      strawman: null
+      weighted_average: null
+      verdict: null
+    iteration_2:
+      red_team: null
+      blue_team: null
+      devils_advocate: null
+      steelman: null
+      strawman: null
+      weighted_average: null
+      verdict: null
+    iteration_3:
+      red_team: null
+      blue_team: null
+      devils_advocate: null
+      steelman: null
+      strawman: null
+      weighted_average: null
+      verdict: null
+
+# =============================================================================
+# TASK MAPPING
+# =============================================================================
+task_mapping:
+  task_001:
+    id: "TASK-001"
+    title: "Add upgrade path documentation"
+    effort: "1h"
+    type: "DOCS"
+    strategy: "CRITIQUE_CYCLE"
+    gap: "G-022"
+    target_file: "GETTING_STARTED.md"
+    acceptance:
+      - "Upgrade instructions in GETTING_STARTED.md"
+      - "Version migration guidance (v1.x to v2.x)"
+      - "Config file migration steps"
+      - "Breaking change checklist"
+
+  task_002:
+    id: "TASK-002"
+    title: "Add schema version checking"
+    effort: "1h"
+    type: "CODE"
+    strategy: "RED/GREEN/REFACTOR"
+    gap: null
+    target_files:
+      - "statusline.py"
+      - "test_statusline.py"
+    acceptance:
+      - "Schema version field in config/state files"
+      - "Version mismatch detection with user-friendly warning"
+      - "Backward compatibility for unversioned configs"
+
+# =============================================================================
+# BLOCKERS AND ISSUES
+# =============================================================================
+blockers:
+  active: []
+
+issues:
+  resolved: []
+
+# =============================================================================
+# NEXT ACTIONS
+# =============================================================================
+next_actions:
+  immediate:
+    - action: "Execute Phase 1 agents"
+      agents: ["ps-tdd-red", "nse-requirements", "nse-risk"]
+      execution_mode: "PARALLEL"
+
+  subsequent:
+    - action: "Complete Barrier 1 cross-pollination"
+      depends_on: "Phase 1 complete"
+    - action: "Execute Phase 2 agents"
+      depends_on: "Barrier 1 complete"
+    - action: "Complete Barrier 2 cross-pollination"
+      depends_on: "Phase 2 complete"
+    - action: "Execute Phase 3 agents (5 critics + V&V)"
+      depends_on: "Barrier 2 complete"
+    - action: "Complete Barrier 3 cross-pollination"
+      depends_on: "Phase 3 complete"
+    - action: "Execute Phase 4 agents (revision + sign-off)"
+      depends_on: "Barrier 3 complete"
+
+# =============================================================================
+# RESUMPTION CONTEXT
+# =============================================================================
+resumption:
+  last_checkpoint: null
+  current_state: "Workflow created. Ready to execute Phase 1."
+  next_step: "Execute Phase 1 agents (ps-tdd-red, nse-requirements, nse-risk) in parallel."
+
+  files_to_read:
+    - "orchestration/en006-20260212-001/ORCHESTRATION_PLAN.md"
+    - "orchestration/en006-20260212-001/ORCHESTRATION_WORKTRACKER.md"
+    - "orchestration/en006-20260212-001/ORCHESTRATION.yaml"
+
+  cross_session_portable: true
+  ephemeral_references: false

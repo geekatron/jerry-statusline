@@ -43,7 +43,7 @@ Cross-platform compatibility gap remediation based on XPLAT-001 analysis.
 
 | Status | Count |
 |--------|-------|
-| pending | 1 Feature (FEAT-003), 1 Enabler (EN-006) |
+| pending | 1 Feature (FEAT-003), 2 Enablers (EN-006, EN-009) |
 | in_progress | 1 Epic |
 | completed | 2 Features (FEAT-001, FEAT-002), 7 Enablers (EN-001..EN-005, EN-007, EN-008), 2 Bugs (BUG-001, BUG-002), 33 Tasks |
 
@@ -61,7 +61,7 @@ Cross-platform compatibility gap remediation based on XPLAT-001 analysis.
 
 | ID | Title | Status | Priority | Features | Progress |
 |----|-------|--------|----------|----------|----------|
-| [EPIC-001](work/EPIC-001-cross-platform-compatibility/EPIC-001-cross-platform-compatibility.md) | Cross-Platform Compatibility | in_progress | critical | 3 | 82% |
+| [EPIC-001](work/EPIC-001-cross-platform-compatibility/EPIC-001-cross-platform-compatibility.md) | Cross-Platform Compatibility | in_progress | critical | 3 | 79% |
 
 ---
 
@@ -75,10 +75,10 @@ Cross-platform compatibility gap remediation based on XPLAT-001 analysis.
 +------------------------------------------------------------------+
 | Epics:     [.......................] 0% (0/1 completed)          |
 | Features:  [##############........] 67% (2/3 completed)          |
-| Enablers:  [####################..] 88% (7/8 completed)          |
-| Tasks:     [####################..] 87% (33/38 completed)        |
+| Enablers:  [################......] 78% (7/9 completed)          |
+| Tasks:     [##################....] 80% (33/41 completed)        |
 +------------------------------------------------------------------+
-| Overall:   [###################...] 82%                           |
+| Overall:   [################......] 79%                           |
 +------------------------------------------------------------------+
 ```
 
@@ -88,10 +88,10 @@ Cross-platform compatibility gap remediation based on XPLAT-001 analysis.
 |-------|----------------|--------|
 | Phase 1: Critical Remediations | 26h (26h done) | completed |
 | Phase 2: High-Priority Improvements | 18h (18h done) | completed |
-| Phase 3: Nice-to-Have Enhancements | 16h | pending |
+| Phase 3: Nice-to-Have Enhancements | 8h (EN-006 2h + EN-009 6h) | pending |
 | CI Build Fix (EN-008) | 1h (1h done) | completed |
 | EN-005 Edge Case Handling | 8h (8h done) | completed |
-| **Total** | **61h (53h done)** | - |
+| **Total** | **61h (53h done)** | 87% |
 
 ---
 
@@ -105,5 +105,6 @@ Cross-platform compatibility gap remediation based on XPLAT-001 analysis.
 | 2026-02-11 | Claude | Updated | FEAT-002 completed via orchestrated workflow (feat002-20260211-001). EN-003 code hardening + EN-004 documentation done. 5-role adversarial critique, 2 iterations, V&V sign-off approved. Progress: 39% → 69%. |
 | 2026-02-11 | Claude | Updated | EN-008 CI build fix: BUG-001 (debug_log NameError) + BUG-002 (Windows rmdir). All 4 Windows CI jobs were failing. Progress: 69% → 71%. |
 | 2026-02-12 | Claude | Updated | EN-005 completed via orchestrated workflow (en005-20260211-001). 6 tasks, 8h effort. Dual-pipeline with adversarial critique (0.945 score). V&V sign-off PASS. Progress: 71% → 82%. |
+| 2026-02-12 | Claude | Updated | EN-006 scope narrowed (8h → 2h): hardware testing tasks split to new EN-009 (6h). EN-006 now covers upgrade docs + schema versioning only. FEAT-003 updated (EN-005 complete, EN-009 added). Progress recalculated: 82% → 79% (new work items added). |
 
 ---

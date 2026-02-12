@@ -10,19 +10,19 @@
 > **Completed:** -
 > **Parent:** FEAT-003
 > **Owner:** -
-> **Effort:** 8h
+> **Effort:** 2h
 
 ---
 
 ## Summary
 
-Explore and test additional platforms beyond the core three (macOS, Linux glibc, Windows).
+Improve upgrade experience and forward compatibility for the status line script.
 
 **Technical Scope:**
-- ARM Linux (Raspberry Pi) testing
-- Windows ARM testing
-- FreeBSD consideration
-- Upgrade path documentation
+- Upgrade path documentation (version migration instructions)
+- Schema version checking (detect config/state format mismatches)
+
+> **Note:** Hardware platform testing (ARM Linux, Windows ARM, FreeBSD) has been split out to [EN-009](../EN-009-hardware-platform-testing/EN-009-hardware-platform-testing.md) as it requires physical hardware access.
 
 ---
 
@@ -32,20 +32,17 @@ Explore and test additional platforms beyond the core three (macOS, Linux glibc,
 
 | ID | Title | Status | Effort |
 |----|-------|--------|--------|
-| TASK-001 | Test ARM Linux (Raspberry Pi) | pending | 2h |
-| TASK-002 | Test Windows ARM | pending | 2h |
-| TASK-003 | Consider FreeBSD support | pending | 2h |
-| TASK-004 | Add upgrade path documentation | pending | 1h |
-| TASK-005 | Add schema version checking | pending | 1h |
+| TASK-001 | Add upgrade path documentation | pending | 1h |
+| TASK-002 | Add schema version checking | pending | 1h |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] ARM Linux test results documented
-- [ ] Windows ARM test results documented
-- [ ] FreeBSD support decision documented
 - [ ] Upgrade instructions in GETTING_STARTED.md
+- [ ] Schema version field in config/state files
+- [ ] Version mismatch detection with user-friendly warning
+- [ ] Backward compatibility for unversioned configs
 
 ---
 
@@ -54,9 +51,6 @@ Explore and test additional platforms beyond the core three (macOS, Linux glibc,
 | Gap ID | Description |
 |--------|-------------|
 | G-022 | Upgrade path documentation |
-| G-023 | ARM Linux (Raspberry Pi) testing |
-| G-024 | FreeBSD consideration |
-| G-025 | Windows ARM testing |
 
 ---
 
@@ -65,5 +59,6 @@ Explore and test additional platforms beyond the core three (macOS, Linux glibc,
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-03 | Claude | pending | Enabler created |
+| 2026-02-12 | Claude | pending | Scope narrowed: hardware testing tasks (TASK-001/002/003) split to EN-009. Effort reduced 8h → 2h. Tasks renumbered. |
 
 ---

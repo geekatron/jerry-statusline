@@ -28,13 +28,15 @@ Nice-to-have enhancements that can be addressed after GA release.
 
 ### Definition of Done
 
-- [ ] NO_COLOR environment variable respected
-- [ ] UNC path limitations documented
-- [ ] Git timeout made configurable
-- [ ] SSH/tmux terminal documented
+- [x] NO_COLOR environment variable respected
+- [x] UNC path limitations documented
+- [x] Git timeout made configurable
+- [x] SSH/tmux terminal documented
 - [ ] ARM Linux tested or documented as untested
-- [ ] State file writes made atomic
+- [x] State file writes made atomic
 - [ ] All MEDIUM gaps (G-016 through G-022) closed
+- [ ] Upgrade path documentation added
+- [ ] Schema version checking implemented
 
 ---
 
@@ -44,8 +46,9 @@ Nice-to-have enhancements that can be addressed after GA release.
 
 | ID | Type | Title | Status | Priority | Effort |
 |----|------|-------|--------|----------|--------|
-| [EN-005](EN-005-edge-cases/EN-005-edge-cases.md) | architecture | Edge Case Handling | pending | medium | 8h |
-| [EN-006](EN-006-platform-expansion/EN-006-platform-expansion.md) | exploration | Platform Expansion | pending | low | 8h |
+| [EN-005](EN-005-edge-cases/EN-005-edge-cases.md) | architecture | Edge Case Handling | completed | medium | 8h |
+| [EN-006](EN-006-platform-expansion/EN-006-platform-expansion.md) | exploration | Platform Expansion | pending | low | 2h |
+| [EN-009](EN-009-hardware-platform-testing/EN-009-hardware-platform-testing.md) | exploration | Hardware Platform Testing | pending | low | 6h |
 
 ---
 
@@ -55,10 +58,10 @@ Nice-to-have enhancements that can be addressed after GA release.
 +------------------------------------------------------------------+
 |                   FEATURE PROGRESS TRACKER                        |
 +------------------------------------------------------------------+
-| Enablers:  [.......................] 0% (0/2 completed)          |
-| Tasks:     [.......................] 0% (0/11 completed)         |
+| Enablers:  [#######.............] 33% (1/3 completed)            |
+| Tasks:     [#########...........] 46% (6/13 completed)           |
 +------------------------------------------------------------------+
-| Overall:   [.......................] 0%                          |
+| Overall:   [########............] 38%                             |
 +------------------------------------------------------------------+
 ```
 
@@ -89,5 +92,6 @@ Nice-to-have enhancements that can be addressed after GA release.
 | Date | Author | Status | Notes |
 |------|--------|--------|-------|
 | 2026-02-03 | Claude | pending | Feature created from XPLAT-001 Phase 3 |
+| 2026-02-12 | Claude | pending | EN-005 completed (6 tasks, 8h). EN-006 scope narrowed to upgrade docs + schema versioning (2h). Hardware testing split to EN-009 (6h). Progress: 0% → 38%. |
 
 ---
