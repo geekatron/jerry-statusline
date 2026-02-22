@@ -264,8 +264,9 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 
 def debug_log(message: str) -> None:
-    """Log debug message to file if debug mode enabled."""
+    """Log debug message to stderr and file if debug mode enabled."""
     if os.environ.get("ECW_DEBUG") == "1":
+        print(f"[ECW-DEBUG] {message}", file=sys.stderr)
         try:
             log_path = os.path.join(os.path.expanduser("~"), ".claude", "statusline-debug.log")
             with open(log_path, "a") as f:
