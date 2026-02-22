@@ -2,12 +2,12 @@
 
 [![Tests](https://github.com/geekatron/jerry-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/geekatron/jerry-statusline/actions/workflows/test.yml)
 
-**Evolved Claude Workflow** - A single-file, self-contained status line for Claude Code providing maximum visibility into session state, resource consumption, and workspace context.
+**Evolved Claude Workflow** - A single-file, self-contained status line for Claude Code providing maximum visibility into session state, resource consumption, and workspace context. Integrates with [Jerry Framework](https://github.com/geekatron/jerry) for domain-computed context monitoring.
 
 ## Overview
 
 ```
-🟣 Sonnet | 📊 [▓▓▓▓░░░░░░] 42% | 💰 CAD 1.23 | ⚡ 8.5k→ 45.2k↺ | ⏱️ 44h05m 1.6Mtok | 📉 180k→46k | 🔧 Read:2.1k Edit:1.5k | 🌿 main ✓ | ~/project
+🟣 Sonnet | 📊 [▓▓▓▓░░░░░░] 42% | 💰 CAD 1.23 | ⚡ 8.5k→ 45.2k↺ | ⏱️ 44h05m 1.6Mtok | 📉 180k→46k | 🤖 2↑14↓ 892kctx | 🔧 Read:2.1k Edit:1.5k | 🌿 main ✓ | ~/project
 ```
 
 ### Segments
@@ -20,6 +20,7 @@
 | **Tokens** | Fresh → Cached token breakdown | ⚡ 8.5k→ 45.2k↺ | Orange=fresh, Cyan=cached |
 | **Session** | Duration + total tokens consumed | ⏱️ 44h05m 1.6Mtok | Cyan (informational) |
 | **Compaction** | Token delta after auto-compact | 📉 180k→46k | Pink (shows when detected) |
+| **Sub-Agents** | Active/completed agent counts + context | 🤖 2↑14↓ 892kctx | Cyan (Jerry-only, FEAT-002) |
 | **Tools** | Dominant tools by tokens | 🔧 Read:2.1k Edit:1.5k | Purple (optional, requires config) |
 | **Git** | Branch + status | 🌿 main ✓ | Green=clean, Yellow=dirty |
 | **Directory** | Working directory | ~/project | Gray |
@@ -29,6 +30,7 @@
 - Python 3.9+
 - Claude Code CLI
 - Git (optional)
+- [Jerry Framework](https://github.com/geekatron/jerry) (optional, for enhanced context monitoring)
 
 ## Installation
 
@@ -57,6 +59,56 @@ Add to your `~/.claude/settings.json`:
 ```
 
 That's it. No additional files required.
+
+## Jerry Framework Integration (v3.0.0)
+
+When the [Jerry Framework](https://github.com/geekatron/jerry) is available, ECW Status Line delegates context monitoring to Jerry's `context_monitoring` bounded context via `jerry context estimate`. Jerry provides:
+
+- **5-tier threshold classification** (NOMINAL/LOW/WARNING/CRITICAL/EMERGENCY) replacing the standalone 2-tier system
+- **Compaction detection** with before/after token counts
+- **Sub-agent tracking** with per-agent context fill and lifecycle status
+- **Full session passthrough** — every field from Claude Code's JSON is normalized into a single response
+
+**How it works:** The status line pipes Claude Code's stdin JSON to `jerry --json context estimate` via subprocess. Jerry computes domain data and returns structured JSON. The status line renders it.
+
+**Graceful fallback:** If Jerry is unavailable (not installed, timeout, error), the status line continues with standalone computation unchanged. No configuration change needed.
+
+**Auto-detection:** Jerry is discovered via:
+1. `CLAUDE_PLUGIN_ROOT` environment variable (set by Claude Code when plugins are active)
+2. `workspace.project_dir` from Claude Code JSON (if a `pyproject.toml` exists there)
+3. Manual override via `jerry.command` in config
+
+### Jerry Configuration
+
+```json
+{
+  "jerry": {
+    "enabled": true,
+    "command": "",
+    "timeout": 3
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `jerry.enabled` | `true` | Enable/disable Jerry integration |
+| `jerry.command` | `""` | Override command (empty = auto-detect) |
+| `jerry.timeout` | `3` | Subprocess timeout in seconds |
+
+### Sub-Agents Segment
+
+When Jerry data is available and sub-agents exist, a new segment appears:
+
+```
+🤖 2↑14↓ 892kctx
+```
+
+- **↑** = active sub-agents
+- **↓** = completed sub-agents
+- **ctx** = aggregate context tokens across all agents
+
+---
 
 ## Configuration
 
@@ -163,6 +215,11 @@ Only specify values you want to override. All other settings use defaults.
     "tokens_cached": 81,
     "compaction": 213
   },
+  "jerry": {
+    "enabled": true,
+    "command": "",
+    "timeout": 3
+  },
   "advanced": {
     "handle_cumulative_bug": true,
     "git_timeout": 2,
@@ -171,7 +228,7 @@ Only specify values you want to override. All other settings use defaults.
 }
 ```
 
-## Key Features (v2.1.0)
+## Key Features (v3.0.0)
 
 ### Configurable Currency
 
@@ -279,6 +336,8 @@ Or auto-compact when terminal is narrow:
 | Subscription type | Not available | Not in JSON payload |
 | Per-tool breakdown | Available | Via transcript parsing |
 | Accurate context after auto-compact | Partial | Known bug ([#13783](https://github.com/anthropics/claude-code/issues/13783)) |
+| Sub-agent context tracking | Available | Requires Jerry Framework |
+| 5-tier threshold classification | Available | Requires Jerry Framework |
 
 ### Context Window Bug
 
@@ -320,6 +379,16 @@ python3 test_statusline.py
 Expected: `RESULTS: 17 passed, 0 failed`
 
 ## Version History
+
+- **3.0.0** - Jerry Framework integration
+  - Jerry `context estimate` CLI integration for domain-computed context monitoring
+  - 5-tier threshold classification (NOMINAL/LOW/WARNING/CRITICAL/EMERGENCY) replaces 2-tier
+  - Sub-agents segment showing active/completed counts and aggregate context
+  - Compaction detection enhanced with Jerry's cross-invocation state tracking
+  - Graceful fallback: Jerry unavailable = standalone mode unchanged
+  - Auto-detection via `CLAUDE_PLUGIN_ROOT` env var
+  - Configurable timeout (default 3s) for Jerry subprocess
+  - Full session passthrough in Jerry JSON response
 
 - **2.1.0** - User experience + cross-platform improvements
   - Configurable currency symbol (supports CAD, EUR, etc.)
