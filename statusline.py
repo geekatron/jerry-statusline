@@ -44,7 +44,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 # =============================================================================
 # VERSION
@@ -59,7 +59,7 @@ _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 # DEFAULT CONFIGURATION (embedded - no external file required)
 # =============================================================================
 
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     # Schema version for config/state compatibility checking
     "schema_version": "1",
     # Display settings
@@ -173,7 +173,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # =============================================================================
 
 
-def _get_config_paths() -> List[Path]:
+def _get_config_paths() -> list[Path]:
     """Get config file search paths, handling missing HOME gracefully."""
     paths = [Path(__file__).parent / "ecw-statusline-config.json"]
     try:
@@ -186,7 +186,7 @@ def _get_config_paths() -> List[Path]:
 
 CONFIG_PATHS = _get_config_paths()
 
-_transcript_cache: Dict[str, Tuple[float, Dict[str, int]]] = {}
+_transcript_cache: dict[str, tuple[float, dict[str, int]]] = {}
 
 
 def _schema_version_mismatch(found_version: Any) -> bool:
@@ -213,14 +213,14 @@ def _schema_version_mismatch(found_version: Any) -> bool:
         return True
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """Load configuration from embedded defaults with optional file override."""
     config = deep_copy(DEFAULT_CONFIG)
 
     for config_path in CONFIG_PATHS:
         if config_path.exists():
             try:
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     user_config = json.load(f)
                 # Check for schema version mismatch before merging
                 user_schema_version = user_config.get("schema_version")
@@ -237,7 +237,7 @@ def load_config() -> Dict[str, Any]:
                 config["schema_version"] = DEFAULT_CONFIG["schema_version"]
                 debug_log(f"Loaded config from {config_path}")
                 break
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 debug_log(f"Config load error from {config_path}: {e}")
 
     return config
@@ -252,7 +252,7 @@ def deep_copy(obj: Any) -> Any:
     return obj
 
 
-def deep_merge(base: Dict, override: Dict) -> Dict:
+def deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge override into base dict."""
     result = base.copy()
     for key, value in override.items():
@@ -264,9 +264,17 @@ def deep_merge(base: Dict, override: Dict) -> Dict:
 
 
 def debug_log(message: str) -> None:
-    """Log debug message to stderr if debug mode enabled."""
+    """Log debug message to stderr and file if debug mode enabled."""
     if os.environ.get("ECW_DEBUG") == "1":
         print(f"[ECW-DEBUG] {message}", file=sys.stderr)
+        try:
+            log_path = os.path.join(os.path.expanduser("~"), ".claude", "statusline-debug.log")
+            with open(log_path, "a") as f:
+                import datetime
+
+                f.write(f"[{datetime.datetime.now().isoformat()}] {message}\n")
+        except OSError:
+            pass
 
 
 def configure_windows_console() -> None:
@@ -290,7 +298,7 @@ def configure_windows_console() -> None:
 # =============================================================================
 
 
-def _resolve_state_path(config: Dict) -> Optional[Path]:
+def _resolve_state_path(config: dict) -> Path | None:
     """Resolve state file path, returning None if HOME is unavailable."""
     raw_path = config["compaction"]["state_file"]
     if not isinstance(raw_path, str):
@@ -303,7 +311,7 @@ def _resolve_state_path(config: Dict) -> Optional[Path]:
         return None
 
 
-def load_state(config: Dict) -> Dict[str, Any]:
+def load_state(config: dict) -> dict[str, Any]:
     """Load previous state for compaction detection."""
     default = {
         "previous_context_tokens": 0,
@@ -317,13 +325,11 @@ def load_state(config: Dict) -> Dict[str, Any]:
 
     try:
         if state_file.exists():
-            with open(state_file, "r", encoding="utf-8") as f:
+            with open(state_file, encoding="utf-8") as f:
                 loaded = json.load(f)
             # Check schema version - fall back to defaults on mismatch
             loaded_version = loaded.get("schema_version")
-            if loaded_version is not None and _schema_version_mismatch(
-                loaded_version
-            ):
+            if loaded_version is not None and _schema_version_mismatch(loaded_version):
                 debug_log(
                     f"State schema version mismatch: "
                     f"found {loaded_version}, "
@@ -339,7 +345,7 @@ def load_state(config: Dict) -> Dict[str, Any]:
     return default
 
 
-def save_state(config: Dict, state: Dict[str, Any]) -> None:
+def save_state(config: dict, state: dict[str, Any]) -> None:
     """Save current state for next invocation.
 
     Uses atomic write pattern (write to temp file, then rename) to prevent
@@ -384,10 +390,57 @@ def save_state(config: Dict, state: Dict[str, Any]) -> None:
 # =============================================================================
 
 
-def _build_jerry_command(config: Dict, data: Dict) -> Optional[List[str]]:
+def _get_claude_config_dir() -> Path | None:
+    """Get the Claude Code configuration directory (cross-platform).
+
+    Returns ~/.claude on macOS/Linux, %APPDATA%/claude on Windows.
+    """
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            return Path(appdata) / "claude"
+    try:
+        return Path.home() / ".claude"
+    except (RuntimeError, KeyError, OSError):
+        return None
+
+
+def _find_jerry_plugin_root() -> str | None:
+    """Find Jerry's install path from Claude Code's installed plugins registry.
+
+    Reads the installed_plugins.json to find the jerry plugin's installPath.
+    Works for any user who has jerry installed as a Claude Code plugin.
+    Cross-platform: handles ~/.claude (macOS/Linux) and %APPDATA%/claude (Windows).
+
+    Returns the installPath string or None if not found.
+    """
+    config_dir = _get_claude_config_dir()
+    if config_dir is None:
+        return None
+    registry = config_dir / "plugins" / "installed_plugins.json"
+    if not registry.exists():
+        return None
+    try:
+        data = json.loads(registry.read_text(encoding="utf-8"))
+        entries = data.get("plugins", {}).get("jerry@jerry-framework", [])
+        for entry in entries:
+            install_path = entry.get("installPath", "")
+            if install_path and os.path.isdir(install_path):
+                return install_path
+    except (json.JSONDecodeError, OSError, KeyError):
+        pass
+    return None
+
+
+def _build_jerry_command(config: dict, data: dict) -> list[str] | None:
     """Build the jerry context estimate command.
 
-    Auto-detects Jerry via CLAUDE_PLUGIN_ROOT env var.
+    Resolution order:
+    1. Explicit jerry.command in config file (user override)
+    2. CLAUDE_PLUGIN_ROOT env var (set by Claude Code for hooks)
+    3. Claude Code installed plugins registry (~/.claude/plugins/installed_plugins.json)
+    4. Workspace project_dir fallback
+
     Returns None if Jerry is not available.
     """
     override = config.get("jerry", {}).get("command", "")
@@ -397,22 +450,48 @@ def _build_jerry_command(config: Dict, data: Dict) -> Optional[List[str]]:
     plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
     if plugin_root and os.path.isdir(plugin_root):
         return [
-            "uv", "run", "--directory", plugin_root,
-            "jerry", "--json", "context", "estimate",
+            "uv",
+            "run",
+            "--directory",
+            plugin_root,
+            "jerry",
+            "--json",
+            "context",
+            "estimate",
+        ]
+
+    # Auto-discover from Claude Code's plugin registry
+    registry_root = _find_jerry_plugin_root()
+    if registry_root:
+        return [
+            "uv",
+            "run",
+            "--directory",
+            registry_root,
+            "jerry",
+            "--json",
+            "context",
+            "estimate",
         ]
 
     # Try workspace project_dir as fallback
     project_dir = safe_get(data, "workspace", "project_dir", default="")
     if project_dir and os.path.isfile(os.path.join(project_dir, "pyproject.toml")):
         return [
-            "uv", "run", "--directory", project_dir,
-            "jerry", "--json", "context", "estimate",
+            "uv",
+            "run",
+            "--directory",
+            project_dir,
+            "jerry",
+            "--json",
+            "context",
+            "estimate",
         ]
 
     return None
 
 
-def try_jerry_estimate(input_json: str, config: Dict, data: Dict) -> Optional[Dict[str, Any]]:
+def try_jerry_estimate(input_json: str, config: dict, data: dict) -> dict[str, Any] | None:
     """Try calling jerry context estimate for enhanced domain computation.
 
     Returns Jerry's response dict or None if unavailable/failed.
@@ -430,12 +509,16 @@ def try_jerry_estimate(input_json: str, config: Dict, data: Dict) -> Optional[Di
     timeout = jerry_config.get("timeout", 3)
 
     try:
+        # Clear VIRTUAL_ENV to prevent uv venv mismatch when the statusline
+        # runs inside a different project's activated virtualenv
+        env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
         result = subprocess.run(
             cmd,
             input=input_json,
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
         if result.returncode == 0 and result.stdout.strip():
             jerry_data = json.loads(result.stdout.strip())
@@ -457,7 +540,7 @@ def try_jerry_estimate(input_json: str, config: Dict, data: Dict) -> Optional[Di
 # =============================================================================
 
 
-def _colors_enabled(config: Optional[Dict]) -> bool:
+def _colors_enabled(config: dict | None) -> bool:
     """Check whether ANSI color output is enabled.
 
     Colors are disabled when:
@@ -466,14 +549,12 @@ def _colors_enabled(config: Optional[Dict]) -> bool:
     """
     if os.environ.get("NO_COLOR") is not None:
         return False
-    if config is not None and not safe_get(
-        config, "display", "use_color", default=True
-    ):
+    if config is not None and not safe_get(config, "display", "use_color", default=True):
         return False
     return True
 
 
-def ansi_color(code: int, config: Optional[Dict] = None) -> str:
+def ansi_color(code: int, config: dict | None = None) -> str:
     """Generate ANSI 256-color escape sequence.
 
     Returns empty string when colors are disabled via NO_COLOR env var
@@ -486,7 +567,7 @@ def ansi_color(code: int, config: Optional[Dict] = None) -> str:
     return f"\033[38;5;{code}m"
 
 
-def ansi_reset(config: Optional[Dict] = None) -> str:
+def ansi_reset(config: dict | None = None) -> str:
     """Generate ANSI reset escape sequence.
 
     Returns empty string when colors are disabled.
@@ -497,11 +578,17 @@ def ansi_reset(config: Optional[Dict] = None) -> str:
 
 
 def get_terminal_width() -> int:
-    """Get current terminal width."""
+    """Get current terminal width.
+
+    Returns 0 when running as a subprocess (no TTY) to prevent
+    auto_compact_width from falsely triggering compact mode.
+    Claude Code runs the statusline as a piped subprocess, so
+    os.get_terminal_size() will always fail in that context.
+    """
     try:
         return os.get_terminal_size().columns
     except OSError:
-        return 80
+        return 0
 
 
 # =============================================================================
@@ -509,7 +596,7 @@ def get_terminal_width() -> int:
 # =============================================================================
 
 
-def safe_get(data: Dict, *keys, default: Any = None) -> Any:
+def safe_get(data: dict, *keys, default: Any = None) -> Any:
     """Safely navigate nested dict keys."""
     current = data
     for key in keys:
@@ -525,7 +612,7 @@ def safe_get(data: Dict, *keys, default: Any = None) -> Any:
 # =============================================================================
 
 
-def parse_transcript_for_tools(transcript_path: str, config: Dict) -> Dict[str, int]:
+def parse_transcript_for_tools(transcript_path: str, config: dict) -> dict[str, int]:
     """Parse transcript JSONL file to extract per-tool token usage."""
     tools_config = config["tools"]
 
@@ -546,10 +633,10 @@ def parse_transcript_for_tools(transcript_path: str, config: Dict) -> Dict[str, 
             debug_log("Using cached transcript data")
             return cached_data
 
-    tool_tokens: Dict[str, int] = {}
+    tool_tokens: dict[str, int] = {}
 
     try:
-        with open(transcript_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(transcript_path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -563,14 +650,14 @@ def parse_transcript_for_tools(transcript_path: str, config: Dict) -> Dict[str, 
         _transcript_cache[cache_key] = (now, tool_tokens)
         debug_log(f"Parsed transcript: {tool_tokens}")
 
-    except IOError as e:
+    except OSError as e:
         debug_log(f"Transcript read error: {e}")
         return {}
 
     return tool_tokens
 
 
-def _extract_tool_usage(entry: Dict, tool_tokens: Dict[str, int]) -> None:
+def _extract_tool_usage(entry: dict, tool_tokens: dict[str, int]) -> None:
     """Extract tool usage from a transcript entry."""
     message = entry.get("message", {})
     content = message.get("content", [])
@@ -583,15 +670,11 @@ def _extract_tool_usage(entry: Dict, tool_tokens: Dict[str, int]) -> None:
                     tool_name = block.get("name", "unknown")
                     input_data = block.get("input", {})
                     token_estimate = _estimate_tokens(input_data)
-                    tool_tokens[tool_name] = (
-                        tool_tokens.get(tool_name, 0) + token_estimate
-                    )
+                    tool_tokens[tool_name] = tool_tokens.get(tool_name, 0) + token_estimate
                 elif block_type == "tool_result":
                     content_data = block.get("content", "")
                     token_estimate = _estimate_tokens(content_data)
-                    tool_tokens["results"] = (
-                        tool_tokens.get("results", 0) + token_estimate
-                    )
+                    tool_tokens["results"] = tool_tokens.get("results", 0) + token_estimate
 
     usage = entry.get("usage", {})
     if usage:
@@ -618,7 +701,7 @@ def _estimate_tokens(data: Any) -> int:
 # =============================================================================
 
 
-def extract_model_info(data: Dict) -> Tuple[str, str]:
+def extract_model_info(data: dict) -> tuple[str, str]:
     """Extract model display name and tier."""
     display_name = safe_get(data, "model", "display_name", default="Unknown")
     model_id = safe_get(data, "model", "id", default="").lower()
@@ -633,18 +716,22 @@ def extract_model_info(data: Dict) -> Tuple[str, str]:
     return display_name, tier
 
 
-def extract_context_info(data: Dict, config: Dict) -> Tuple[float, int, int, bool]:
-    """Extract context window usage."""
-    context_window_size = safe_get(
-        data, "context_window", "context_window_size", default=200000
-    )
+def extract_context_info(data: dict, config: dict) -> tuple[float, int, int, bool]:
+    """Extract context window usage.
+
+    Prefers Claude Code's pre-calculated used_percentage when available,
+    as it accounts for output tokens (which become input on the next turn).
+    Falls back to input-only token calculation when used_percentage is absent.
+    """
+    context_window_size = safe_get(data, "context_window", "context_window_size", default=200000)
     current_usage = safe_get(data, "context_window", "current_usage")
+
+    # Prefer Claude Code's pre-calculated percentage (includes output tokens)
+    used_pct = safe_get(data, "context_window", "used_percentage")
 
     if current_usage:
         input_tokens = safe_get(current_usage, "input_tokens", default=0)
-        cache_creation = safe_get(
-            current_usage, "cache_creation_input_tokens", default=0
-        )
+        cache_creation = safe_get(current_usage, "cache_creation_input_tokens", default=0)
         cache_read = safe_get(current_usage, "cache_read_input_tokens", default=0)
         used_tokens = input_tokens + cache_creation + cache_read
         is_estimated = False
@@ -652,25 +739,27 @@ def extract_context_info(data: Dict, config: Dict) -> Tuple[float, int, int, boo
         used_tokens = safe_get(data, "context_window", "total_input_tokens", default=0)
         is_estimated = True
 
-    if (
-        used_tokens > context_window_size
-        and config["advanced"]["handle_cumulative_bug"]
-    ):
+    if used_tokens > context_window_size and config["advanced"]["handle_cumulative_bug"]:
         is_estimated = True
 
-    percentage = (used_tokens / context_window_size) if context_window_size > 0 else 0
+    # Use Claude Code's percentage if available (accounts for output tokens);
+    # fall back to input-only calculation otherwise
+    if used_pct is not None and isinstance(used_pct, (int, float)) and used_pct > 0:
+        percentage = used_pct / 100.0
+    else:
+        percentage = (used_tokens / context_window_size) if context_window_size > 0 else 0
 
     return percentage, used_tokens, context_window_size, is_estimated
 
 
-def extract_cost_info(data: Dict) -> Tuple[float, int]:
+def extract_cost_info(data: dict) -> tuple[float, int]:
     """Extract cost and duration info."""
     cost = safe_get(data, "cost", "total_cost_usd", default=0.0)
     duration_ms = safe_get(data, "cost", "total_duration_ms", default=0)
     return cost, duration_ms
 
 
-def extract_token_breakdown(data: Dict) -> Tuple[int, int]:
+def extract_token_breakdown(data: dict) -> tuple[int, int]:
     """
     Extract fresh vs cached token breakdown.
     Returns: (fresh_tokens, cached_tokens)
@@ -686,7 +775,7 @@ def extract_token_breakdown(data: Dict) -> Tuple[int, int]:
     return fresh_tokens, cached_tokens
 
 
-def extract_session_info(data: Dict) -> Tuple[int, int, int]:
+def extract_session_info(data: dict) -> tuple[int, int, int]:
     """
     Extract session duration and total tokens consumed.
     Returns: (elapsed_seconds, total_input_tokens, total_output_tokens)
@@ -700,7 +789,7 @@ def extract_session_info(data: Dict) -> Tuple[int, int, int]:
     return elapsed_seconds, total_input, total_output
 
 
-def extract_compaction_info(data: Dict, config: Dict) -> Tuple[bool, int, int]:
+def extract_compaction_info(data: dict, config: dict) -> tuple[bool, int, int]:
     """
     Detect compaction by comparing current context to previous.
     Returns: (compaction_detected, from_tokens, to_tokens)
@@ -746,7 +835,7 @@ def extract_compaction_info(data: Dict, config: Dict) -> Tuple[bool, int, int]:
     return False, 0, 0
 
 
-def extract_workspace_info(data: Dict, config: Dict) -> str:
+def extract_workspace_info(data: dict, config: dict) -> str:
     """Extract and format workspace directory."""
     current_dir = safe_get(data, "workspace", "current_dir", default="")
 
@@ -773,7 +862,7 @@ def extract_workspace_info(data: Dict, config: Dict) -> str:
     return current_dir
 
 
-def extract_tools_info(data: Dict, config: Dict) -> List[Tuple[str, int]]:
+def extract_tools_info(data: dict, config: dict) -> list[tuple[str, int]]:
     """Extract top tools by token usage from transcript."""
     transcript_path = safe_get(data, "transcript_path", default="")
     tool_tokens = parse_transcript_for_tools(transcript_path, config)
@@ -782,9 +871,7 @@ def extract_tools_info(data: Dict, config: Dict) -> List[Tuple[str, int]]:
     min_tokens = tools_config["min_tokens"]
     top_n = tools_config["top_n"]
 
-    filtered = [
-        (name, tokens) for name, tokens in tool_tokens.items() if tokens >= min_tokens
-    ]
+    filtered = [(name, tokens) for name, tokens in tool_tokens.items() if tokens >= min_tokens]
     sorted_tools = sorted(filtered, key=lambda x: x[1], reverse=True)
 
     return sorted_tools[:top_n]
@@ -795,7 +882,7 @@ def extract_tools_info(data: Dict, config: Dict) -> List[Tuple[str, int]]:
 # =============================================================================
 
 
-def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
+def get_git_info(data: dict, config: dict) -> tuple[str, bool, int] | None:
     """Get git branch, status, and uncommitted file count."""
     git_config = config["git"]
     timeout = config["advanced"]["git_timeout"]
@@ -849,7 +936,7 @@ def get_git_info(data: Dict, config: Dict) -> Optional[Tuple[str, bool, int]]:
 # =============================================================================
 
 
-def format_progress_bar(percentage: float, config: Dict, color_code: int) -> str:
+def format_progress_bar(percentage: float, config: dict, color_code: int) -> str:
     """Format a progress bar with color."""
     bar_config = config["display"]["progress_bar"]
     width = bar_config["width"]
@@ -897,7 +984,7 @@ def get_threshold_color(
     value: float,
     green_max: float,
     yellow_max: float,
-    colors: Dict,
+    colors: dict,
     invert: bool = False,
 ) -> int:
     """Get color code based on threshold."""
@@ -922,7 +1009,7 @@ def get_threshold_color(
 # =============================================================================
 
 
-def build_model_segment(data: Dict, config: Dict) -> str:
+def build_model_segment(data: dict, config: dict) -> str:
     """Build the model display segment."""
     display_name, tier = extract_model_info(data)
     colors = config["colors"]
@@ -939,7 +1026,7 @@ def build_model_segment(data: Dict, config: Dict) -> str:
         return f"{color}{display_name}{reset}"
 
 
-def _jerry_tier_to_color(tier: str, colors: Dict) -> int:
+def _jerry_tier_to_color(tier: str, colors: dict) -> int:
     """Map Jerry's ThresholdTier to ANSI color code.
 
     Mapping: NOMINAL/LOW → green, WARNING → yellow, CRITICAL/EMERGENCY → red.
@@ -954,9 +1041,7 @@ def _jerry_tier_to_color(tier: str, colors: Dict) -> int:
     return colors["green"]
 
 
-def build_context_segment(
-    data: Dict, config: Dict, jerry_data: Optional[Dict] = None
-) -> str:
+def build_context_segment(data: dict, config: dict, jerry_data: dict | None = None) -> str:
     """Build the context window usage segment.
 
     Uses Jerry's domain data (tier, fill_percentage) when available,
@@ -968,7 +1053,7 @@ def build_context_segment(
     # Use Jerry data if available (ST-004/ST-005)
     jerry_context = safe_get(jerry_data, "context") if jerry_data else None
     if jerry_context and isinstance(jerry_context, dict):
-        percentage = jerry_context.get("fill_percentage", 0) / 100.0
+        percentage = jerry_context.get("fill_percentage", 0)
         is_estimated = jerry_context.get("is_estimated", False)
         tier = jerry_context.get("tier", "NOMINAL")
         color_code = _jerry_tier_to_color(tier, colors)
@@ -989,7 +1074,7 @@ def build_context_segment(
     return f"{icon}{estimate_marker}{bar}"
 
 
-def build_cost_segment(data: Dict, config: Dict) -> str:
+def build_cost_segment(data: dict, config: dict) -> str:
     """Build the cost display segment with configurable currency."""
     cost, _ = extract_cost_info(data)
     colors = config["colors"]
@@ -1007,7 +1092,7 @@ def build_cost_segment(data: Dict, config: Dict) -> str:
     return f"{icon}{color}{currency}{cost:.2f}{reset}"
 
 
-def build_tokens_segment(data: Dict, config: Dict) -> str:
+def build_tokens_segment(data: dict, config: dict) -> str:
     """
     Build the token breakdown segment.
     Format: ⚡ 500→ 45.2k↺
@@ -1030,7 +1115,7 @@ def build_tokens_segment(data: Dict, config: Dict) -> str:
     return f"{icon}{fresh_color}{fresh_str}{fresh_indicator}{reset} {cached_color}{cached_str}{cached_indicator}{reset}"
 
 
-def build_session_segment(data: Dict, config: Dict) -> str:
+def build_session_segment(data: dict, config: dict) -> str:
     """
     Build the session segment showing duration + total tokens consumed.
     Format: ⏱️ 44h05m 1.2M tokens
@@ -1050,9 +1135,7 @@ def build_session_segment(data: Dict, config: Dict) -> str:
     return f"{icon}{color}{duration_str} {tokens_str}tok{reset}"
 
 
-def build_compaction_segment(
-    data: Dict, config: Dict, jerry_data: Optional[Dict] = None
-) -> str:
+def build_compaction_segment(data: dict, config: dict, jerry_data: dict | None = None) -> str:
     """Build the compaction indicator segment.
 
     Uses Jerry's compaction detection when available, falling back
@@ -1085,7 +1168,7 @@ def build_compaction_segment(
     return f"{icon}{color}{from_str}{arrow}{to_str}{reset}"
 
 
-def build_sub_agents_segment(jerry_data: Optional[Dict], config: Dict) -> str:
+def build_sub_agents_segment(jerry_data: dict | None, config: dict) -> str:
     """Build the sub-agents summary segment from Jerry data.
 
     Shows active/completed agent counts and total context usage.
@@ -1121,7 +1204,7 @@ def build_sub_agents_segment(jerry_data: Optional[Dict], config: Dict) -> str:
     return f"{icon}{color}{completed}↓{ctx_part}{reset}"
 
 
-def build_tools_segment(data: Dict, config: Dict) -> str:
+def build_tools_segment(data: dict, config: dict) -> str:
     """Build the dominant tools segment."""
     if not config["tools"]["enabled"]:
         return ""
@@ -1142,7 +1225,7 @@ def build_tools_segment(data: Dict, config: Dict) -> str:
     return f"{icon}{color}{tools_display}{reset}"
 
 
-def build_git_segment(data: Dict, config: Dict) -> str:
+def build_git_segment(data: dict, config: dict) -> str:
     """Build the git status segment."""
     git_info = get_git_info(data, config)
 
@@ -1174,7 +1257,7 @@ def build_git_segment(data: Dict, config: Dict) -> str:
     return f"{icon}{color}{branch} {status_icon}{reset}".strip()
 
 
-def build_directory_segment(data: Dict, config: Dict) -> str:
+def build_directory_segment(data: dict, config: dict) -> str:
     """Build the directory display segment."""
     directory = extract_workspace_info(data, config)
     colors = config["colors"]
@@ -1191,9 +1274,7 @@ def build_directory_segment(data: Dict, config: Dict) -> str:
 # =============================================================================
 
 
-def build_status_line(
-    data: Dict, config: Dict, jerry_data: Optional[Dict] = None
-) -> str:
+def build_status_line(data: dict, config: dict, jerry_data: dict | None = None) -> str:
     """Build the complete status line from all segments.
 
     When jerry_data is available (FEAT-002), uses Jerry's domain
@@ -1208,7 +1289,10 @@ def build_status_line(
     compact = display_config["compact_mode"]
     if not compact and display_config["auto_compact_width"] > 0:
         term_width = get_terminal_width()
-        if term_width < display_config["auto_compact_width"]:
+        # Only auto-compact when we have a real terminal width.
+        # When running as a subprocess (no TTY), term_width is 0 —
+        # don't compact, let Claude Code handle display truncation.
+        if term_width > 0 and term_width < display_config["auto_compact_width"]:
             compact = True
 
     segments = []
@@ -1229,18 +1313,17 @@ def build_status_line(
         if segments_config["session"]:
             segments.append(build_session_segment(data, config))
 
-        if segments_config.get("compaction", True):
-            compaction_segment = build_compaction_segment(
-                data, config, jerry_data=jerry_data
-            )
-            if compaction_segment:
-                segments.append(compaction_segment)
-
-        # Sub-agents segment (Jerry-only, FEAT-002)
+        # Sub-agents segment (Jerry-only, FEAT-002) — before compaction/tools
+        # so it isn't pushed off-screen by long tool breakdowns
         if jerry_data:
             sub_agents_segment = build_sub_agents_segment(jerry_data, config)
             if sub_agents_segment:
                 segments.append(sub_agents_segment)
+
+        if segments_config.get("compaction", True):
+            compaction_segment = build_compaction_segment(data, config, jerry_data=jerry_data)
+            if compaction_segment:
+                segments.append(compaction_segment)
 
         if segments_config["tools"]:
             tools_segment = build_tools_segment(data, config)
