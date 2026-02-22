@@ -14,15 +14,16 @@ A step-by-step guide to installing and configuring ECW Status Line for Claude Co
 3. [Installation](#installation)
 4. [Verification](#verification)
 5. [Configuration](#configuration)
-6. [Enabling the Tools Segment](#enabling-the-tools-segment)
-7. [Customization Examples](#customization-examples)
-8. [Advanced Configuration](#advanced-configuration)
-9. [Docker and Containers](#docker-and-containers)
-10. [Windows UNC Paths](#windows-unc-paths)
-11. [SSH and tmux](#ssh-and-tmux)
-12. [Troubleshooting](#troubleshooting)
-13. [Uninstallation](#uninstallation)
-14. [Upgrading](#upgrading)
+6. [Jerry Framework Integration](#jerry-framework-integration)
+7. [Enabling the Tools Segment](#enabling-the-tools-segment)
+8. [Customization Examples](#customization-examples)
+9. [Advanced Configuration](#advanced-configuration)
+10. [Docker and Containers](#docker-and-containers)
+11. [Windows UNC Paths](#windows-unc-paths)
+12. [SSH and tmux](#ssh-and-tmux)
+13. [Troubleshooting](#troubleshooting)
+14. [Uninstallation](#uninstallation)
+15. [Upgrading](#upgrading)
 
 ---
 
@@ -531,8 +532,64 @@ You only need to specify values you want to change. All other settings use defau
 | `display.use_color` | true | Enable/disable ANSI color codes |
 | `tools.enabled` | false | Show tools segment |
 | `advanced.git_timeout` | 2 | Git command timeout in seconds |
+| `jerry.enabled` | true | Enable Jerry Framework integration |
+| `jerry.command` | `""` | Override Jerry command (empty = auto-detect) |
+| `jerry.timeout` | 3 | Jerry subprocess timeout in seconds |
 
 See [README.md](README.md) for complete configuration reference.
+
+---
+
+## Jerry Framework Integration
+
+ECW Status Line v3.0.0 integrates with [Jerry Framework](https://github.com/geekatron/jerry) for enhanced context monitoring. This is **optional** — the status line works standalone without Jerry.
+
+### What Jerry Adds
+
+| Feature | Without Jerry | With Jerry |
+|---------|---------------|------------|
+| Context thresholds | 2-tier (warning/critical) | 5-tier (NOMINAL/LOW/WARNING/CRITICAL/EMERGENCY) |
+| Compaction detection | Basic (token delta) | Enhanced (cross-invocation state tracking) |
+| Sub-agents | Not tracked | Active/completed counts + aggregate context |
+| Fill computation | Standalone heuristic | Domain-computed from exact `current_usage` data |
+
+### Setup
+
+Jerry is auto-detected when installed as a Claude Code plugin. No manual configuration is needed.
+
+**To verify Jerry is available:**
+
+```bash
+# Check if CLAUDE_PLUGIN_ROOT is set (auto-set by Claude Code plugins)
+echo $CLAUDE_PLUGIN_ROOT
+
+# Or test Jerry CLI directly
+uv run jerry --json context estimate <<< '{"context_window": {"context_window_size": 200000}}'
+```
+
+**To disable Jerry integration:**
+
+```json
+{
+  "jerry": {
+    "enabled": false
+  }
+}
+```
+
+**To increase timeout (for slower environments):**
+
+```json
+{
+  "jerry": {
+    "timeout": 5
+  }
+}
+```
+
+### Fallback Behavior
+
+If Jerry is not installed, not detected, times out, or returns an error, the status line silently falls back to standalone computation. No error is shown to the user. Debug mode (`ECW_DEBUG=1`) logs the fallback reason.
 
 ---
 
@@ -1309,8 +1366,10 @@ When upgrading across major versions:
 ### Status Line Segments
 
 ```
-🔵/🟣/🟢 Model | 📊 Context | 💰 Cost | ⚡ Tokens | ⏱️ Session | 📉 Compaction | 🔧 Tools | 🌿 Git | 📂 Dir
+🔵/🟣/🟢 Model | 📊 Context | 💰 Cost | ⚡ Tokens | ⏱️ Session | 📉 Compaction | 🤖 Sub-Agents | 🔧 Tools | 🌿 Git | 📂 Dir
 ```
+
+> **Note:** The Sub-Agents segment (🤖) only appears when Jerry Framework is available and sub-agents have been spawned in the session.
 
 ### Color Meanings
 

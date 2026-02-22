@@ -1,10 +1,10 @@
 # MASTER-STATUS.md
 ## ECW Status Line - Project Master Status
 
-**Last Updated:** 2026-01-02
-**Current Version:** 2.1.0
-**Branch:** `claude/build-status-line-LWVfX`
-**Status:** 🟢 COMPLETE - v2.1.0 User Experience Improvements
+**Last Updated:** 2026-02-22
+**Current Version:** 3.0.0
+**Branch:** `feat/proj-004-jerry-integration`
+**Status:** 🟢 COMPLETE - v3.0.0 Jerry Framework Integration
 
 ---
 
@@ -24,6 +24,7 @@ ECW (Evolved Claude Workflow) Status Line is a single-file, self-contained Pytho
 | 4. Testing | ✅ COMPLETE | 100% | 12 tests passing |
 | 5. Documentation | ✅ COMPLETE | 100% | README.md, GETTING_STARTED.md updated |
 | 6. SOP Compliance | ⚠️ PARTIAL | 85% | Keystone docs maintained; BDD/Test pyramid gaps |
+| 7. Jerry Integration | ✅ COMPLETE | 100% | v3.0.0 — `jerry context estimate` CLI, 5-tier thresholds, sub-agents |
 
 ---
 
@@ -250,6 +251,44 @@ ECW (Evolved Claude Workflow) Status Line is a single-file, self-contained Pytho
 
 ---
 
+## Phase 7: Jerry Framework Integration ✅
+
+### Objectives
+- Integrate with Jerry Framework's `context_monitoring` bounded context
+- Replace standalone 2-tier threshold system with Jerry's 5-tier SSOT
+- Add sub-agent tracking via Jerry's lifecycle hooks and transcript parsing
+- Maintain graceful fallback when Jerry is unavailable
+
+### Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `try_jerry_estimate()` | ✅ Complete | Calls `jerry --json context estimate` via subprocess |
+| `_build_jerry_command()` | ✅ Complete | Auto-detects via `CLAUDE_PLUGIN_ROOT` env var |
+| `_jerry_tier_to_color()` | ✅ Complete | Maps 5-tier system to ANSI colors |
+| Context segment (Jerry) | ✅ Complete | Uses Jerry's `fill_percentage` and `tier` when available |
+| Compaction segment (Jerry) | ✅ Complete | Uses Jerry's `compaction.detected` when available |
+| Sub-agents segment | ✅ Complete | New segment: `🤖 2↑14↓ 892kctx` |
+| Jerry config section | ✅ Complete | `jerry.enabled`, `jerry.command`, `jerry.timeout` |
+| Graceful fallback | ✅ Complete | Timeout, FileNotFoundError, JSONDecodeError all handled |
+
+### Key Design Decisions (v3.0.0)
+
+| Decision | Rationale |
+|----------|-----------|
+| Jerry returns JSON, statusline renders | Clean separation — Jerry owns domain, statusline owns rendering |
+| Auto-detect via `CLAUDE_PLUGIN_ROOT` | Zero-config when Jerry is a Claude Code plugin |
+| 3-second timeout default | SPIKE-004 benchmarked p95=112ms; 3s is generous fallback |
+| Fail-open on any error | Status line must never crash due to Jerry |
+
+### Related
+- Jerry PROJ-004: [geekatron/jerry#64](https://github.com/geekatron/jerry/issues/64)
+- Jerry FEAT-002: [geekatron/jerry#63](https://github.com/geekatron/jerry/issues/63)
+- Statusline issue: [geekatron/jerry-statusline#5](https://github.com/geekatron/jerry-statusline/issues/5)
+- Statusline PR: [geekatron/jerry-statusline#4](https://github.com/geekatron/jerry-statusline/pull/4)
+
+---
+
 ## Decisions Log
 
 | Date | Decision | Rationale | Impact |
@@ -262,6 +301,9 @@ ECW (Evolved Claude Workflow) Status Line is a single-file, self-contained Pytho
 | 2026-01-02 | Token breakdown display | Cache % always 99% | Replaced cache segment |
 | 2026-01-02 | Duration + total tokens | 5h block not useful | Replaced session block |
 | 2026-01-02 | Compaction detection | User needs visibility | Added state file persistence |
+| 2026-02-22 | Jerry Framework integration | Domain-computed context > standalone heuristic | v3.0.0 with graceful fallback |
+| 2026-02-22 | 5-tier threshold SSOT | Jerry owns thresholds, statusline consumes | Replaced hardcoded 2-tier |
+| 2026-02-22 | Sub-agent tracking | Visibility into agent context usage | New segment via Jerry data |
 
 ---
 
@@ -279,32 +321,34 @@ ECW (Evolved Claude Workflow) Status Line is a single-file, self-contained Pytho
 ## Files State
 
 ### statusline.py
-- Version: 2.1.0
-- Lines: 946
-- Features: 9 segments (including compaction), transcript parsing, compact mode
-- Tests: 12 passing
+- Version: 3.0.0
+- Lines: ~1140
+- Features: 10 segments (including compaction + sub-agents), Jerry integration, transcript parsing, compact mode
+- Tests: 17 passing
 
 ### test_statusline.py
-- Version: 2.1.0
-- Tests: 12 functional tests
+- Version: 3.0.0
+- Tests: 17 functional tests (including Jerry integration + fallback)
 - Coverage: Comprehensive functional coverage
 
 ### README.md
-- Lines: 348
-- Content: Reference documentation (updated for v2.1.0)
+- Content: Reference documentation (updated for v3.0.0, Jerry integration)
 
 ### GETTING_STARTED.md
-- Lines: 743
-- Content: Onboarding guide (macOS + Windows)
+- Content: Onboarding guide (macOS + Windows + Jerry setup)
 
 ---
 
 ## Project Complete
 
-ECW Status Line v2.1.0 is feature-complete with:
+ECW Status Line v3.0.0 is feature-complete with:
+- Jerry Framework integration for domain-computed context monitoring
+- 5-tier threshold classification (NOMINAL/LOW/WARNING/CRITICAL/EMERGENCY)
+- Sub-agent tracking with context usage aggregation
+- Enhanced compaction detection via Jerry's cross-invocation state
+- Graceful fallback to standalone mode when Jerry is unavailable
 - Configurable currency symbol
 - Token breakdown (fresh/cached)
 - Session duration + total tokens
-- Compaction detection
-- 12 passing tests
+- 17 passing tests
 - Updated documentation

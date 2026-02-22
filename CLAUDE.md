@@ -9,6 +9,7 @@ ECW (Evolved Claude Workflow) Status Line is a single-file, self-contained Pytho
 - **Language:** Python 3.9+ (stdlib only, zero dependencies)
 - **Architecture:** Single-file deployment (`statusline.py`)
 - **Tests:** `test_statusline.py`
+- **Jerry Integration:** v3.0.0 — calls `jerry context estimate` for domain-computed context monitoring (optional, graceful fallback)
 
 ---
 
@@ -131,11 +132,26 @@ Follow conventional commits:
 
 ---
 
+## Jerry Framework Integration
+
+v3.0.0 integrates with [Jerry Framework](https://github.com/geekatron/jerry) for enhanced context monitoring. Key details:
+
+- **Integration point:** `try_jerry_estimate()` calls `jerry --json context estimate` via subprocess
+- **Auto-detection:** Uses `CLAUDE_PLUGIN_ROOT` env var or `workspace.project_dir`
+- **Fallback:** Any failure silently falls back to standalone computation
+- **Config:** `jerry.enabled`, `jerry.command`, `jerry.timeout` in config JSON
+- **Data flow:** Claude Code stdin JSON → Jerry CLI → structured JSON → status line rendering
+- **Jerry adds:** 5-tier thresholds (NOMINAL/LOW/WARNING/CRITICAL/EMERGENCY), sub-agent tracking, enhanced compaction detection
+
+When modifying the Jerry integration code (lines ~383-452), ensure the fail-open design is preserved — the status line must never crash or show errors due to Jerry being unavailable.
+
+---
+
 ## File Locations
 
 | File | Purpose |
 |------|---------|
-| `statusline.py` | Main script (single-file deployment) |
+| `statusline.py` | Main script (single-file deployment, v3.0.0) |
 | `test_statusline.py` | Test suite |
 | `WORKTRACKER.md` | Work item tracking manifest |
 | `work/` | Work breakdown structure |
