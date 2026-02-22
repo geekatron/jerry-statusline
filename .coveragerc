@@ -1,0 +1,16 @@
+[run]
+source = .
+include = statusline.py
+parallel = true
+
+[report]
+include = statusline.py
+show_missing = true
+fail_under = 60
+exclude_lines =
+    pragma: no cover
+    if __name__ == "__main__"
+    debug_log
+
+[xml]
+output = coverage.xml

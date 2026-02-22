@@ -60,6 +60,8 @@ ecw-statusline-state.json
 *.log
 *.tmp
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 .pytest_cache/
 
