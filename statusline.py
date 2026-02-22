@@ -50,7 +50,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # VERSION
 # =============================================================================
 
-__version__ = "2.1.0"
+__version__ = "3.0.0"
 
 # Pattern to strip ANSI escape codes from untrusted input (e.g., git branch names)
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
@@ -153,6 +153,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "tokens_fresh": 214,  # Orange for fresh tokens
         "tokens_cached": 81,  # Cyan for cached tokens
         "compaction": 213,  # Pink for compaction indicator
+    },
+    # Jerry Framework integration (FEAT-002)
+    "jerry": {
+        "enabled": True,  # Try calling jerry context estimate for domain data
+        "command": "",  # Override command; empty = auto-detect via CLAUDE_PLUGIN_ROOT
+        "timeout": 3,  # Timeout in seconds for jerry subprocess
     },
     # Advanced settings
     "advanced": {
@@ -371,6 +377,79 @@ def save_state(config: Dict, state: Dict[str, Any]) -> None:
             raise
     except OSError as e:
         debug_log(f"State save failed: {e}")
+
+
+# =============================================================================
+# JERRY FRAMEWORK INTEGRATION (FEAT-002)
+# =============================================================================
+
+
+def _build_jerry_command(config: Dict, data: Dict) -> Optional[List[str]]:
+    """Build the jerry context estimate command.
+
+    Auto-detects Jerry via CLAUDE_PLUGIN_ROOT env var.
+    Returns None if Jerry is not available.
+    """
+    override = config.get("jerry", {}).get("command", "")
+    if override:
+        return override.split()
+
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
+    if plugin_root and os.path.isdir(plugin_root):
+        return [
+            "uv", "run", "--directory", plugin_root,
+            "jerry", "--json", "context", "estimate",
+        ]
+
+    # Try workspace project_dir as fallback
+    project_dir = safe_get(data, "workspace", "project_dir", default="")
+    if project_dir and os.path.isfile(os.path.join(project_dir, "pyproject.toml")):
+        return [
+            "uv", "run", "--directory", project_dir,
+            "jerry", "--json", "context", "estimate",
+        ]
+
+    return None
+
+
+def try_jerry_estimate(input_json: str, config: Dict, data: Dict) -> Optional[Dict[str, Any]]:
+    """Try calling jerry context estimate for enhanced domain computation.
+
+    Returns Jerry's response dict or None if unavailable/failed.
+    Falls back silently — the statusline continues with standalone computation.
+    """
+    jerry_config = config.get("jerry", {})
+    if not jerry_config.get("enabled", True):
+        return None
+
+    cmd = _build_jerry_command(config, data)
+    if cmd is None:
+        debug_log("Jerry not available: no command found")
+        return None
+
+    timeout = jerry_config.get("timeout", 3)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            input=input_json,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            jerry_data = json.loads(result.stdout.strip())
+            debug_log(f"Jerry response received: tier={safe_get(jerry_data, 'context', 'tier')}")
+            return jerry_data
+        debug_log(f"Jerry failed: exit={result.returncode}, stderr={result.stderr[:200]}")
+    except subprocess.TimeoutExpired:
+        debug_log(f"Jerry timed out after {timeout}s")
+    except FileNotFoundError:
+        debug_log("Jerry command not found")
+    except (json.JSONDecodeError, OSError) as e:
+        debug_log(f"Jerry error: {e}")
+
+    return None
 
 
 # =============================================================================
@@ -860,22 +939,51 @@ def build_model_segment(data: Dict, config: Dict) -> str:
         return f"{color}{display_name}{reset}"
 
 
-def build_context_segment(data: Dict, config: Dict) -> str:
-    """Build the context window usage segment."""
-    percentage, used, total, is_estimated = extract_context_info(data, config)
+def _jerry_tier_to_color(tier: str, colors: Dict) -> int:
+    """Map Jerry's ThresholdTier to ANSI color code.
+
+    Mapping: NOMINAL/LOW → green, WARNING → yellow, CRITICAL/EMERGENCY → red.
+    """
+    tier_upper = tier.upper() if tier else ""
+    if tier_upper in ("NOMINAL", "LOW"):
+        return colors["green"]
+    elif tier_upper == "WARNING":
+        return colors["yellow"]
+    elif tier_upper in ("CRITICAL", "EMERGENCY"):
+        return colors["red"]
+    return colors["green"]
+
+
+def build_context_segment(
+    data: Dict, config: Dict, jerry_data: Optional[Dict] = None
+) -> str:
+    """Build the context window usage segment.
+
+    Uses Jerry's domain data (tier, fill_percentage) when available,
+    falling back to standalone computation.
+    """
     colors = config["colors"]
-    thresholds = config["context"]
-
-    color_code = get_threshold_color(
-        percentage,
-        thresholds["warning_threshold"],
-        thresholds["critical_threshold"],
-        colors,
-    )
-
     icon = "📊 " if config["display"]["use_emoji"] else ""
-    estimate_marker = "~" if is_estimated else ""
 
+    # Use Jerry data if available (ST-004/ST-005)
+    jerry_context = safe_get(jerry_data, "context") if jerry_data else None
+    if jerry_context and isinstance(jerry_context, dict):
+        percentage = jerry_context.get("fill_percentage", 0) / 100.0
+        is_estimated = jerry_context.get("is_estimated", False)
+        tier = jerry_context.get("tier", "NOMINAL")
+        color_code = _jerry_tier_to_color(tier, colors)
+    else:
+        # Fallback: standalone computation with hardcoded thresholds
+        percentage, _used, _total, is_estimated = extract_context_info(data, config)
+        thresholds = config["context"]
+        color_code = get_threshold_color(
+            percentage,
+            thresholds["warning_threshold"],
+            thresholds["critical_threshold"],
+            colors,
+        )
+
+    estimate_marker = "~" if is_estimated else ""
     bar = format_progress_bar(percentage, config, color_code)
 
     return f"{icon}{estimate_marker}{bar}"
@@ -942,13 +1050,24 @@ def build_session_segment(data: Dict, config: Dict) -> str:
     return f"{icon}{color}{duration_str} {tokens_str}tok{reset}"
 
 
-def build_compaction_segment(data: Dict, config: Dict) -> str:
-    """
-    Build the compaction indicator segment.
-    Shows token delta when compaction is detected.
+def build_compaction_segment(
+    data: Dict, config: Dict, jerry_data: Optional[Dict] = None
+) -> str:
+    """Build the compaction indicator segment.
+
+    Uses Jerry's compaction detection when available, falling back
+    to standalone state-file-based detection.
     Format: 📉 150k→46k
     """
-    compacted, from_tokens, to_tokens = extract_compaction_info(data, config)
+    # Use Jerry data if available (ST-005)
+    jerry_compaction = safe_get(jerry_data, "compaction") if jerry_data else None
+    if jerry_compaction and isinstance(jerry_compaction, dict):
+        compacted = jerry_compaction.get("detected", False)
+        from_tokens = jerry_compaction.get("from_tokens", 0)
+        to_tokens = jerry_compaction.get("to_tokens", 0)
+    else:
+        # Fallback: standalone compaction detection
+        compacted, from_tokens, to_tokens = extract_compaction_info(data, config)
 
     if not compacted:
         return ""
@@ -964,6 +1083,42 @@ def build_compaction_segment(data: Dict, config: Dict) -> str:
     to_str = format_tokens_short(to_tokens)
 
     return f"{icon}{color}{from_str}{arrow}{to_str}{reset}"
+
+
+def build_sub_agents_segment(jerry_data: Optional[Dict], config: Dict) -> str:
+    """Build the sub-agents summary segment from Jerry data.
+
+    Shows active/completed agent counts and total context usage.
+    Only displayed when Jerry data is available and agents exist.
+    Format: 🤖 2↑14↓ 892k ctx
+    """
+    if jerry_data is None:
+        return ""
+
+    sub_agents = safe_get(jerry_data, "sub_agents")
+    if not sub_agents or not isinstance(sub_agents, dict):
+        return ""
+
+    total = sub_agents.get("total_count", 0)
+    if total == 0:
+        return ""
+
+    active = sub_agents.get("active_count", 0)
+    completed = sub_agents.get("completed_count", 0)
+    total_ctx = safe_get(sub_agents, "aggregate", "total_context_tokens", default=0)
+
+    colors = config["colors"]
+    use_emoji = config["display"]["use_emoji"]
+    icon = "🤖 " if use_emoji else ""
+    color = ansi_color(colors["cyan"], config)
+    reset = ansi_reset(config)
+
+    ctx_str = format_tokens_short(total_ctx) if total_ctx > 0 else ""
+    ctx_part = f" {ctx_str}ctx" if ctx_str else ""
+
+    if active > 0:
+        return f"{icon}{color}{active}↑{completed}↓{ctx_part}{reset}"
+    return f"{icon}{color}{completed}↓{ctx_part}{reset}"
 
 
 def build_tools_segment(data: Dict, config: Dict) -> str:
@@ -1036,8 +1191,15 @@ def build_directory_segment(data: Dict, config: Dict) -> str:
 # =============================================================================
 
 
-def build_status_line(data: Dict, config: Dict) -> str:
-    """Build the complete status line from all segments."""
+def build_status_line(
+    data: Dict, config: Dict, jerry_data: Optional[Dict] = None
+) -> str:
+    """Build the complete status line from all segments.
+
+    When jerry_data is available (FEAT-002), uses Jerry's domain
+    computation for context/compaction/sub-agent segments. All other
+    segments use the raw Claude Code data.
+    """
     segments_config = config["segments"]
     display_config = config["display"]
     separator = display_config["separator"]
@@ -1055,7 +1217,7 @@ def build_status_line(data: Dict, config: Dict) -> str:
         segments.append(build_model_segment(data, config))
 
     if segments_config["context"]:
-        segments.append(build_context_segment(data, config))
+        segments.append(build_context_segment(data, config, jerry_data=jerry_data))
 
     if segments_config["cost"]:
         segments.append(build_cost_segment(data, config))
@@ -1068,9 +1230,17 @@ def build_status_line(data: Dict, config: Dict) -> str:
             segments.append(build_session_segment(data, config))
 
         if segments_config.get("compaction", True):
-            compaction_segment = build_compaction_segment(data, config)
+            compaction_segment = build_compaction_segment(
+                data, config, jerry_data=jerry_data
+            )
             if compaction_segment:
                 segments.append(compaction_segment)
+
+        # Sub-agents segment (Jerry-only, FEAT-002)
+        if jerry_data:
+            sub_agents_segment = build_sub_agents_segment(jerry_data, config)
+            if sub_agents_segment:
+                segments.append(sub_agents_segment)
 
         if segments_config["tools"]:
             tools_segment = build_tools_segment(data, config)
@@ -1120,7 +1290,10 @@ def main() -> None:
             print("ECW: Parse error")
             return
 
-        status_line = build_status_line(data, config)
+        # FEAT-002: Try Jerry for enhanced domain computation
+        jerry_data = try_jerry_estimate(input_data, config, data)
+
+        status_line = build_status_line(data, config, jerry_data=jerry_data)
         print(status_line)
 
     except Exception as e:
