@@ -50,7 +50,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # VERSION
 # =============================================================================
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 # Pattern to strip ANSI escape codes from untrusted input (e.g., git branch names)
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
