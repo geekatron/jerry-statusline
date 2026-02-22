@@ -247,6 +247,13 @@ SAMPLE_TRANSCRIPT = [
 # =============================================================================
 
 
+def _build_cmd() -> list:
+    """Build the command to run statusline.py, optionally with coverage instrumentation."""
+    if os.environ.get("COVERAGE_MODE"):
+        return [sys.executable, "-m", "coverage", "run", "--parallel-mode", str(STATUSLINE_SCRIPT)]
+    return [sys.executable, str(STATUSLINE_SCRIPT)]
+
+
 def run_test(name: str, payload: dict, config_override: dict = None) -> bool:
     """Run statusline script with payload and display result."""
     print(f"\n{'=' * 60}")
@@ -272,7 +279,7 @@ def run_test(name: str, payload: dict, config_override: dict = None) -> bool:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(payload),
             capture_output=True,
             text=True,
@@ -329,7 +336,7 @@ def run_tools_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(payload),
             capture_output=True,
             text=True,
@@ -371,7 +378,7 @@ def run_compact_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -418,7 +425,7 @@ def run_currency_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -449,7 +456,7 @@ def run_tokens_segment_test() -> bool:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -487,7 +494,7 @@ def run_session_segment_test() -> bool:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_LONG_SESSION),
             capture_output=True,
             text=True,
@@ -542,7 +549,7 @@ def run_compaction_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -584,7 +591,7 @@ def run_no_home_test() -> bool:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -622,7 +629,7 @@ def run_no_tty_test() -> bool:
     try:
         # Run with stdin as pipe (no TTY) - this is the default for subprocess
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_MINIMAL),
             capture_output=True,
             text=True,
@@ -674,7 +681,7 @@ def run_readonly_state_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -724,7 +731,7 @@ def run_emoji_disabled_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -786,7 +793,7 @@ def run_corrupt_state_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -835,7 +842,7 @@ def run_no_color_env_test() -> bool:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -898,7 +905,7 @@ def run_use_color_disabled_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -1008,7 +1015,7 @@ def run_color_matrix_test() -> bool:
                 json.dump(config, f)
 
             result = subprocess.run(
-                [sys.executable, str(STATUSLINE_SCRIPT)],
+                _build_cmd(),
                 input=json.dumps(PAYLOAD_NORMAL),
                 capture_output=True,
                 text=True,
@@ -1085,7 +1092,7 @@ def run_atomic_write_test() -> bool:
 
         # Run 1: Establish state (first run writes state atomically)
         result1 = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -1125,7 +1132,7 @@ def run_atomic_write_test() -> bool:
         # Run 2: With high previous context, should detect compaction
         # (proves state was written correctly and can be read back)
         result2 = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -1245,7 +1252,7 @@ def run_schema_version_in_state_test() -> bool:
 
         # Run the script to trigger state save
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -1306,7 +1313,7 @@ def run_schema_version_mismatch_warning_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -1367,7 +1374,7 @@ def run_unversioned_config_backward_compat_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,
@@ -1455,7 +1462,7 @@ def run_schema_version_match_no_warning_test() -> bool:
             json.dump(config, f)
 
         result = subprocess.run(
-            [sys.executable, str(STATUSLINE_SCRIPT)],
+            _build_cmd(),
             input=json.dumps(PAYLOAD_NORMAL),
             capture_output=True,
             text=True,

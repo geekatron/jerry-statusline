@@ -1,6 +1,7 @@
 # ECW Status Line
 
 [![Tests](https://github.com/geekatron/jerry-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/geekatron/jerry-statusline/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/geekatron/jerry-statusline/graph/badge.svg)](https://codecov.io/gh/geekatron/jerry-statusline)
 
 **Evolved Claude Workflow** - A single-file, self-contained status line for Claude Code providing maximum visibility into session state, resource consumption, and workspace context. Integrates with [Jerry Framework](https://github.com/geekatron/jerry) for domain-computed context monitoring.
 
