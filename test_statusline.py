@@ -3,7 +3,7 @@
 ECW Status Line - Test Suite
 Validates statusline output with mock Claude Code JSON payloads.
 
-Version: 2.1.0
+Version: 3.0.0
 Usage: python3 test_statusline.py
 """
 
@@ -1548,7 +1548,7 @@ def run_upgrade_docs_exist_test() -> bool:
 
 def main() -> int:
     """Run all tests."""
-    print("ECW Status Line - Test Suite v2.1.0")
+    print("ECW Status Line - Test Suite v3.0.0")
     print(f"Script: {STATUSLINE_SCRIPT}")
     print("Single-file deployment test")
 
@@ -1587,7 +1587,7 @@ def main() -> int:
     else:
         failed += 1
 
-    # New v2.1.0 tests
+    # New v3.0.0 tests
 
     # Currency configuration test
     if run_currency_test():

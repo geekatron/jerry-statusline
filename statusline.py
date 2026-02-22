@@ -3,7 +3,7 @@
 ECW Status Line - Evolved Claude Workflow
 Single-file, self-contained status line for Claude Code.
 
-Version: 2.1.0
+Version: 3.0.0
 Python: 3.9+ (stdlib only, zero dependencies)
 License: MIT
 

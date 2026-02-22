@@ -1,0 +1,35 @@
+[project]
+name = "ecw-statusline"
+version = "3.0.0"
+description = "Single-file status line for Claude Code"
+requires-python = ">=3.9"
+
+[tool.bumpversion]
+current_version = "3.0.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+commit_message = "chore(release): bump version to v{new_version} [skip-bump]"
+tag_message = "Release v{new_version}"
+allow_dirty = false
+
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)(-(?P<pre_l>alpha|beta|rc)\\.(?P<pre_n>\\d+))?"
+serialize = [
+    "{major}.{minor}.{patch}-{pre_l}.{pre_n}",
+    "{major}.{minor}.{patch}",
+]
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "statusline.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "pep621"
+tag_format = "v$version"

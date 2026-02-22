@@ -1,0 +1,213 @@
+# ECW Status Line Release Pipeline
+# Triggers on v* tags, validates version, runs CI, builds artifact, creates GitHub Release.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # ===========================================================================
+  # Validate Release
+  # ===========================================================================
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Validate version format
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Error: Invalid version format '$VERSION'"
+            echo "Expected: X.Y.Z or X.Y.Z-suffix (e.g., 3.0.0, 3.1.0-beta.1)"
+            exit 1
+          fi
+          echo "Valid version format: $VERSION"
+
+      - name: Check version in pyproject.toml
+        run: |
+          TAG_VERSION=${{ steps.version.outputs.version }}
+          PYPROJECT_VERSION=$(grep -E '^version = ' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "Tag version: $TAG_VERSION"
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          if [[ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]]; then
+            echo "ERROR: Tag version ($TAG_VERSION) does not match pyproject.toml version ($PYPROJECT_VERSION)"
+            echo "The version bump workflow should have aligned these. Investigate."
+            exit 1
+          fi
+
+      - name: Validate version sync across all files
+        run: |
+          python3 scripts/sync_versions.py --check
+
+  # ===========================================================================
+  # Run CI Checks
+  # ===========================================================================
+  ci:
+    name: CI Checks
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+          enable-cache: true
+
+      - name: Run lint
+        run: uv run --with ruff ruff check statusline.py test_statusline.py
+
+      - name: Run tests
+        run: uv run python test_statusline.py
+        env:
+          PYTHONUTF8: "1"
+
+      - name: Run security scan
+        run: uv run --with bandit bandit -r statusline.py -ll -ii
+
+  # ===========================================================================
+  # Build Release Artifact
+  # ===========================================================================
+  build:
+    name: Build Release Artifact
+    runs-on: ubuntu-latest
+    needs: [validate, ci]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create release artifact
+        run: |
+          VERSION=${{ needs.validate.outputs.version }}
+          mkdir -p dist
+
+          # Copy statusline with versioned name
+          cp statusline.py "dist/statusline-${VERSION}.py"
+
+          # Also include the plain name for convenience
+          cp statusline.py dist/statusline.py
+
+          echo "Release artifacts:"
+          ls -lh dist/
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.sha256
+          cat checksums.sha256
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            dist/statusline-*.py
+            dist/statusline.py
+            dist/checksums.sha256
+
+  # ===========================================================================
+  # Create GitHub Release
+  # ===========================================================================
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: dist
+
+      - name: Generate release notes
+        run: |
+          VERSION=${{ needs.validate.outputs.version }}
+
+          # Get the previous tag for comparison
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [[ -n "$PREV_TAG" ]]; then
+            echo "Generating notes from $PREV_TAG to v$VERSION"
+            NOTES=$(git log $PREV_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges | head -50)
+          else
+            echo "No previous tag found, using all commits"
+            NOTES=$(git log --pretty=format:"- %s (%h)" --no-merges | head -50)
+          fi
+
+          cat > release-notes.md << NOTES_EOF
+          ## ECW Status Line v${VERSION}
+
+          Single-file, self-contained status line for Claude Code.
+
+          ### Installation
+
+          1. Download \`statusline.py\` from the release assets
+          2. Copy to \`~/.claude/statusline.py\`
+          3. \`chmod +x ~/.claude/statusline.py\`
+          4. Add to \`~/.claude/settings.json\`:
+             \`\`\`json
+             {
+               "statusLine": {
+                 "type": "command",
+                 "command": "python3 ~/.claude/statusline.py",
+                 "padding": 0
+               }
+             }
+             \`\`\`
+
+          ### What's Changed
+
+          NOTES_EOF
+
+          echo "$NOTES" >> release-notes.md
+
+          cat >> release-notes.md << 'FOOTER_EOF'
+
+          ### Verification
+
+          Verify the download integrity using the checksums:
+          ```bash
+          sha256sum -c checksums.sha256
+          ```
+
+          ---
+          *Released automatically via GitHub Actions*
+          FOOTER_EOF
+
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ECW Status Line v${{ needs.validate.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(needs.validate.outputs.version, '-') }}
+          files: |
+            dist/statusline-*.py
+            dist/statusline.py
+            dist/checksums.sha256
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
