@@ -38,6 +38,13 @@ repos:
       - id: detect-private-key
       - id: check-merge-conflict
 
+  # Commitizen - Conventional Commit Message Linting
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.4.1
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
   # Detect secrets patterns
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
