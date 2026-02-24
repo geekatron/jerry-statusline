@@ -39,7 +39,7 @@
 
 ```bash
 # 1. Download the script
-curl -o ~/.claude/statusline.py https://raw.githubusercontent.com/your-org/ecw-statusline/main/statusline.py
+curl -o ~/.claude/statusline.py https://raw.githubusercontent.com/geekatron/jerry-statusline/main/statusline.py
 
 # 2. Make executable
 chmod +x ~/.claude/statusline.py
